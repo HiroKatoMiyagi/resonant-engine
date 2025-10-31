@@ -1,0 +1,10 @@
+名称,型,説明,初期値
+対象ページID（またはURL）,Text,紐付けたい仕様書ページのIDまたはURLを入力,
+レビュー種別,Select,レビューの由来（ユノ／アトラス／外部）,"ユノ"
+ステータス,Select,Open／In Review／Resolved など,Open
+重要度,Select,Low／Medium／High／Critical,Medium
+レビュアー,Text,担当レビュアー名（NotionのPeopleを使う場合は後で型変更）,
+コメント,Rich text,レビュー本文の記録,
+公開可,Checkbox,公開サマリを出す場合にON,FALSE
+作成日時,Created time,ページ作成日時を自動記録,
+更新日時,Last edited time,最終編集日時を自動記録,

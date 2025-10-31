@@ -1,0 +1,20 @@
+/Users/zero/Projects/kiro-v3.1/daemon/resonant_bridge_daemon.sh:17: no such file or directory: /Users/zero/Projects/kiro-v3.1/scripts/phase10_introspection.sh
+/Users/zero/Projects/kiro-v3.1/daemon/resonant_bridge_daemon.sh:17: no such file or directory: /Users/zero/Projects/kiro-v3.1/scripts/phase10_introspection.sh
+/Users/zero/Projects/kiro-v3.1/daemon/resonant_bridge_daemon.sh:17: no such file or directory: /Users/zero/Projects/kiro-v3.1/scripts/phase10_introspection.sh
+/Users/zero/Projects/kiro-v3.1/daemon/resonant_bridge_daemon.sh:17: no such file or directory: /Users/zero/Projects/kiro-v3.1/scripts/phase10_introspection.sh
+/Users/zero/Projects/kiro-v3.1/daemon/resonant_bridge_daemon.sh:17: no such file or directory: /Users/zero/Projects/kiro-v3.1/scripts/phase10_introspection.sh
+/Users/zero/Projects/kiro-v3.1/daemon/resonant_bridge_daemon.sh:17: no such file or directory: /Users/zero/Projects/kiro-v3.1/scripts/phase10_introspection.sh
+/Users/zero/Projects/kiro-v3.1/daemon/resonant_bridge_daemon.sh:17: no such file or directory: /Users/zero/Projects/kiro-v3.1/scripts/phase10_introspection.sh
+/Users/zero/Projects/kiro-v3.1/daemon/resonant_bridge_daemon.sh:17: no such file or directory: /Users/zero/Projects/kiro-v3.1/scripts/phase10_introspection.sh
+/Users/zero/Projects/kiro-v3.1/daemon/resonant_bridge_daemon.sh:17: no such file or directory: /Users/zero/Projects/kiro-v3.1/scripts/phase10_introspection.sh
+/Users/zero/Projects/kiro-v3.1/daemon/resonant_bridge_daemon.sh:59: permission denied: /Users/zero/Projects/kiro-v3.1/scripts/reflection_verification.sh
+/Users/zero/Projects/kiro-v3.1/daemon/resonant_bridge_daemon.sh:59: permission denied: /Users/zero/Projects/kiro-v3.1/scripts/reflection_verification.sh
+jq: error: Could not open file /Users/zero/Projects/kiro-v3.1/bridge/intent_protocol.json: No such file or directory
+jq: error: Could not open file /Users/zero/Projects/kiro-v3.1/bridge/intent_protocol.json: No such file or directory
+jq: error: Could not open file /Users/zero/Projects/kiro-v3.1/bridge/intent_protocol.json: No such file or directory
+jq: error: Could not open file /Users/zero/Projects/kiro-v3.1/bridge/intent_protocol.json: No such file or directory
+jq: error: Could not open file /Users/zero/Projects/kiro-v3.1/bridge/intent_protocol.json: No such file or directory
+jq: error: Could not open file /Users/zero/Projects/kiro-v3.1/bridge/intent_protocol.json: No such file or directory
+jq: error: Could not open file /Users/zero/Projects/kiro-v3.1/bridge/intent_protocol.json: No such file or directory
+jq: error: Could not open file /Users/zero/Projects/kiro-v3.1/bridge/intent_protocol.json: No such file or directory
+jq: error: Could not open file /Users/zero/Projects/kiro-v3.1/bridge/intent_protocol.json: No such file or directory

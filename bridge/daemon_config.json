@@ -1,0 +1,8 @@
+{
+  "watch_path": "/Users/zero/Projects/kiro-v3.1/bridge/intent_protocol.json",
+  "output_root": "/Users/zero/Projects/kiro-v3.1/",
+  "auto_execute": true,
+  "allow_direct_write": true,
+  "log_path": "/Users/zero/Projects/kiro-v3.1/logs/daemon_bridge.log",
+  "telemetry_report": "/Users/zero/Projects/kiro-v3.1/logs/telemetry_report.json"
+}

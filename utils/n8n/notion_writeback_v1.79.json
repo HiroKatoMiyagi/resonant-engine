@@ -1,0 +1,82 @@
+{
+  "id": "a9e3e0ab-9a10-4e71-8f12-5eab305a1d70",
+  "name": "Notion Write-back Flow",
+  "active": false,
+  "versionId": "c1dfc9ac-fb2c-41a3-bd3b-b09f9bcb2c3a",
+  "nodes": [
+    {
+      "id": "13e0b56b-3c47-4ad8-946f-98b90f00a1a7",
+      "name": "Webhook (AI → Notion)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notion-writeback",
+        "options": {}
+      },
+      "webhookDescription": "Receives AI review result from Responses or Claude."
+    },
+    {
+      "id": "7df71d9d-26d3-4b59-9f3a-b25b2de12c5b",
+      "name": "Update Notion Page",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 1,
+      "position": [500, 300],
+      "parameters": {
+        "resource": "page",
+        "operation": "update",
+        "pageId": "={{ $json[\"notion_page_id\"] }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "name": "実行メモ",
+              "value": "={{ $json[\"review_result\"] }}"
+            },
+            {
+              "name": "構築ステータス",
+              "value": "実稼働"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "b908c8b2-8cb5-4e0d-9a32-1e38ab83b55b",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [800, 300],
+      "parameters": {
+        "options": {},
+        "responseMode": "lastNode",
+        "responseData": {
+          "responseContentType": "json",
+          "responseBody": {
+            "status": "success"
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "13e0b56b-3c47-4ad8-946f-98b90f00a1a7": {
+      "main": [
+        [
+          {
+            "node": "7df71d9d-26d3-4b59-9f3a-b25b2de12c5b",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7df71d9d-26d3-4b59-9f3a-b25b2de12c5b": {
+      "main": [
+        [
+          {
+            "node": "b908c8b2-8cb5-4e0d-9a32-1e38ab83b55b",
+            "type": "main",
+            "index": 0
+          }
+        ]

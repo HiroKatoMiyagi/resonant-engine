@@ -1,0 +1,10 @@
+名称,型,説明,初期値
+タスク名,Title,タスクの識別名を入力,（例）WF#1 コメント整備
+対象ページID（またはURL）,Text,紐付けたい仕様書ページのIDまたはURLを入力,
+担当,Text,実担当者名（Peopleにしたい場合は後で型変更）,
+優先度,Select,Low／Medium／High／Urgent,Medium
+状態,Select,ToDo／Doing／Blocked／Done,ToDo
+期限,Date,期限日を設定,
+備考,Rich text,補足情報（自由記入）,
+作成日時,Created time,ページ作成日時を自動記録,
+更新日時,Last edited time,最終編集日時を自動記録,

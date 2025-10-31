@@ -1,0 +1,13 @@
+# Environment
+.env
+
+# macOS
+.DS_Store
+
+# Legacy / Cache
+archive_legacy/
+*/data/
+*.sqlite
+*.log
+*.journal
+binaryData/

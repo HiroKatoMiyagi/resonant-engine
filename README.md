@@ -46,3 +46,4 @@ external_update: test trigger Sat Nov  1 18:29:55 JST 2025
 # another update Sat Nov  1 18:36:21 JST 2025
 # re-evaluation test Sat Nov  1 18:38:57 JST 2025
 # re-eval Sat Nov  1 18:43:48 JST 2025
+# external_update test Sat Nov  1 18:53:07 JST 2025

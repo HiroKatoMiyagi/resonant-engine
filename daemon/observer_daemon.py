@@ -1,25 +1,56 @@
 #!/usr/bin/env python3
+# 🧩 observer_daemon.py
+# 改善案適用済み:
+#  - duplicate detection (intent_hash & commit)
+#  - unified log_hypothesis_event()
+#  - phase=external_sync_validation 付与
+
+# noqa: S603, S607  # subprocess usage intentionally allowed for controlled git commands
+import sys
+import os
+sys.path.append(os.path.dirname(__file__))  # allow importing from daemon directory
 import subprocess
 import time
 import datetime
-import os
+from daemon import log_archiver
+from daemon.hypothesis_trace import HypothesisTrace
 
-LOG_PATH = os.path.join(os.path.dirname(__file__), "logs", "observer_daemon.log")
-try:
-    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
-except Exception as e:
-    print(f"💥 Failed to create log directory: {e}", flush=True)
-    LOG_PATH = "/tmp/observer_daemon.log"  # fallback
+ # --- Ensure absolute and consistent logs directory ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_DIR = os.path.join(BASE_DIR, "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+
+LOG_PATH = os.path.join(LOG_DIR, "observer_daemon.log")
+# Add constant for hypothesis trace log path
+HYPOTHESIS_LOG_PATH = os.path.join(LOG_DIR, "hypothesis_trace_log.json")
+
+CONFIG_PATH = os.path.join(BASE_DIR, "config.txt")
+
+def load_check_interval(default=10):
     try:
-        os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
-    except Exception as inner_e:
-        print(f"💥 Secondary log path creation failed: {inner_e}", flush=True)
-CHECK_INTERVAL = 10  # 10 seconds
+        if os.path.exists(CONFIG_PATH):
+            with open(CONFIG_PATH, "r") as f:
+                value = f.read().strip()
+                if value.isdigit():
+                    return int(value)
+        return default
+    except Exception:
+        return default
+
+CHECK_INTERVAL = load_check_interval()
 
 def log(message):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(LOG_PATH, "a") as f:
         f.write(f"[{timestamp}] {message}\n")
+
+def log_hypothesis_event(event_type, hyp_id, status=None, phase=None):
+    """Unified logger for HypothesisTrace events with optional phase tag."""
+    phase_tag = f"[Phase: {phase}] " if phase else ""
+    if event_type == "record":
+        log(f"[🧠 Hypothesis Recorded] {phase_tag}{hyp_id}: observer_daemon外部更新検知")
+    elif event_type == "update":
+        log(f"[✅ Hypothesis Updated] {phase_tag}{hyp_id} → {status}")
 
 def run_command(command):
     try:
@@ -31,12 +62,13 @@ def run_command(command):
         log(f"Exception running '{command}': {e}")
         return ""
 
+LOCK_FILE = "/Users/zero/Projects/resonant-engine/daemon/pids/observer_daemon.lock"
+
 def main():
     import sys
     sys.stdout = open(1, 'w', encoding='utf-8', buffering=1)  # 強制フラッシュ設定
     print("🧩 observer_daemon.py main() entered", flush=True)
     print("🪶 STEP 1: Entered main()", flush=True)
-    LOCK_FILE = "/private/tmp/observer_daemon.lock"
 
     print("🪶 STEP 2: Checking lock file existence...", flush=True)
     # Clean stale lock files older than 5 minutes
@@ -62,6 +94,10 @@ def main():
 
     print("🔍 observer_daemon started — writing to", LOG_PATH, flush=True)
     log("✅ observer_daemon initialized.")
+    try:
+        log_archiver.archive("boot")
+    except Exception as e:
+        log(f"[archive] failed at boot: {e}")
     print("✅ observer_daemon initialized.", flush=True)
     log("🔍 observer_daemon active…")
     print(">>> entering loop", flush=True)
@@ -74,7 +110,62 @@ def main():
             print("🪶 LOOP: git fetch complete", flush=True)
             diff_output = run_command("git diff --stat HEAD..origin/main")
             print("🪶 LOOP: diff check complete", flush=True)
-            if diff_output:
+            last_commit_msg = run_command("git log -1 --pretty=%B origin/main").strip()
+            if "auto_reflect" in last_commit_msg:
+                log("[🌀 Reflection] Self-generated update detected — skipping pull.")
+                try:
+                    log_archiver.archive("self_reflection_skip")
+                except Exception as e:
+                    log(f"[archive] failed during auto_reflect: {e}")
+            elif "external_update" in last_commit_msg:
+                log("[🪞 External Resonance] External update detected — pulling latest changes.")
+                # --- Debounce: skip if last recorded commit is identical ---
+                last_record_file = os.path.join(LOG_DIR, "last_commit.txt")
+                last_commit = run_command("git rev-parse origin/main").strip()
+                prev_commit = ""
+                if os.path.exists(last_record_file):
+                    with open(last_record_file, "r") as f:
+                        prev_commit = f.read().strip()
+                if prev_commit == last_commit:
+                    log(f"[⏸️ Debounce] Skipping duplicate external update for commit {last_commit}.")
+                    time.sleep(CHECK_INTERVAL)
+                    continue
+                with open(last_record_file, "w") as f:
+                    f.write(last_commit)
+
+                pull_output = run_command("git pull origin main")
+                # --- Step 1: result_diff連携強化 ---
+                result_diff = run_command("git diff origin/main..HEAD")
+                diff_path = os.path.join(LOG_DIR, f"result_diff_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+                with open(diff_path, "w") as diff_file:
+                    diff_file.write(result_diff)
+                log(f"[🔍 result_diff captured] saved to {diff_path}")
+
+                try:
+                    log_archiver.archive("external_update_pull")
+                    tracer = HypothesisTrace(log_path=HYPOTHESIS_LOG_PATH)
+                    hyp_id = tracer.record(
+                        intent_text="observer_daemon外部更新検知",
+                        expected_effect="外部commitをpullして同期",
+                        target_files=["daemon/observer_daemon.py"]
+                    )
+                    log_hypothesis_event("record", hyp_id, phase="external_sync_validation")
+                    if not hasattr(tracer, "update"):
+                        log("[⚠️ result_diff integration skipped: HypothesisTrace.update() not supporting result_diff_path]")
+                    with open(diff_path, "r") as df:
+                        diff_content = df.read()
+                    tracer.update(
+                        hyp_id,
+                        "validated",
+                        pull_output or "差分同期完了",
+                        related_commit=run_command("git rev-parse HEAD"),
+                        phase="external_sync_validation",
+                        result_diff=diff_content
+                    )
+                    log_hypothesis_event("update", hyp_id, "validated", phase="external_sync_validation")
+                except Exception as e:
+                    log(f"[archive] failed during external_update: {e}")
+            elif diff_output:
                 log("🔔 Detected updates on remote main branch:")
                 log(diff_output)
             else:
@@ -94,3 +185,5 @@ if __name__ == "__main__":
         print(f"💥 Exception during startup: {e}", flush=True)
         import traceback
         traceback.print_exc()
+    import atexit
+    atexit.register(lambda: log_archiver.archive("atexit"))

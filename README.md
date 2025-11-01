@@ -37,3 +37,4 @@ auto_reflect update
 
 
 External update test – 2025-11-01
+# external_update test – Resonant Trace Validation (CLI)

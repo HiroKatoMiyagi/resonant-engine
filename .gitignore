@@ -11,3 +11,8 @@ archive_legacy/
 *.log
 *.journal
 binaryData/
+__pycache__/
+daemon/logs/
+daemon/pids/
+daemon/hypothesis_trace_log.jsonl
+logs/trace_map.jsonl

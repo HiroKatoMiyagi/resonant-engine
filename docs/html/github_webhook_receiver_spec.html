@@ -1,0 +1,91 @@
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Resonant Trace Bridge v1.1 — GitHub Webhook Receiver仕様書</title>
+<style>
+body { font-family: "Segoe UI", sans-serif; line-height: 1.6; margin: 40px; color: #222; }
+h1, h2, h3 { color: #004080; }
+code { background: #f5f5f5; padding: 2px 4px; border-radius: 3px; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+th, td { border: 1px solid #ccc; padding: 8px; }
+pre { background: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; }
+hr { border: none; height: 1px; background: #ccc; margin: 30px 0; }
+</style>
+</head>
+<body>
+
+<h1>Resonant Trace Bridge v1.1 — GitHub Webhook Receiver仕様書</h1>
+
+<h2>概要</h2>
+<p>このモジュールは、GitHubリポジトリ <code>HiroKatoMiyagi/resonant-engine</code> のPushイベントを受信し、
+内部ログへ記録した後に思想層連携プロセス（<code>trace_linker.py</code>）を自動実行する。
+開発環境・思想層・実行層を同期させるための「思想と行動の橋渡し（Trace Bridge）」を担う。</p>
+
+<hr/>
+
+<h2>主機能一覧</h2>
+<table>
+<tr><th>区分</th><th>機能</th><th>概要</th></tr>
+<tr><td>Webhook受信</td><td>/github-webhook</td><td>GitHubのpushイベントを受信（Flaskベース）</td></tr>
+<tr><td>署名検証</td><td>verify_signature()</td><td>X-Hub-Signature-256ヘッダを検証</td></tr>
+<tr><td>重複防止</td><td>delivery_cache.json</td><td>Delivery IDを保存し再送を防止</td></tr>
+<tr><td>ログ記録</td><td>write_log()</td><td>JSONL形式でwebhook内容を logs/webhook_log.jsonl に保存</td></tr>
+<tr><td>自動連結</td><td>trace_linker.py</td><td>pushイベントをトリガに思想層リンクを自動更新</td></tr>
+<tr><td>サーバ起動</td><td>Flask App</td><td>port 5001で常駐</td></tr>
+</table>
+
+<h2>ファイル構成</h2>
+<pre>
+resonant-engine/
+ ├─ utils/
+ │   ├─ github_webhook_receiver.py  ← 本仕様対象
+ │   ├─ trace_linker.py             ← 連携先
+ │   ├─ intent_logger.py            ← 意図記録支援
+ │   └─ trace_auto.sh               ← 自動再起動スクリプト
+ └─ logs/
+     ├─ webhook_log.jsonl
+     ├─ trace_map.jsonl
+     └─ delivery_cache.json
+</pre>
+
+<h2>処理フロー概要</h2>
+<ol>
+<li>GitHub Pushイベント発生</li>
+<li>GitHub Hookshot → <code>http://&lt;host&gt;:5001/github-webhook</code></li>
+<li><code>verify_signature()</code> により署名検証</li>
+<li>Delivery IDをキャッシュ照合</li>
+<li>正常時、payloadを <code>logs/webhook_log.jsonl</code> に追記</li>
+<li>pushイベントの場合、<code>trace_linker.py</code> を <code>subprocess.run()</code> にて呼出</li>
+<li>実行結果・エラーを標準出力・stderrへ記録</li>
+</ol>
+
+<h2>設計上の意図（思想連結構造）</h2>
+<p><b>思想層（Yuno）</b> と <b>実装層（GitHub）</b> の乖離を検出・修復する「トリガーポイント」。<br/>
+Pushイベントを単なる更新通知ではなく、<b>思想更新の呼吸点</b> として扱う。<br/>
+<code>telemetry_feedback_loop.sh</code> により、このWebhook結果を定期的に解析し、Yuno側の内部モデルへフィードバック。</p>
+
+<h2>環境変数</h2>
+<table>
+<tr><th>名称</th><th>内容</th></tr>
+<tr><td>RESONANT_ENGINE_BASE_DIR</td><td>プロジェクト基底パス</td></tr>
+<tr><td>GITHUB_WEBHOOK_SECRET</td><td>HMAC署名用シークレット</td></tr>
+</table>
+
+<h2>依存関係</h2>
+<ul>
+<li>Flask v3.x</li>
+<li>Python 3.10+</li>
+<li>trace_linker.py（Resonant Link更新モジュール）</li>
+<li>telemetry_feedback_loop.sh（周期的フィードバック制御）</li>
+</ul>
+
+<h2>今後の拡張構想</h2>
+<table>
+<tr><th>項目</th><th>概要</th></tr>
+<tr><td>Telemetry統合</td><td>webhook結果→telemetry_feedback_loop.sh→Yuno self-sync</td></tr>
+<tr><td>Multi-event対応</td><td>issue_comment, pull_request イベント追加</td></tr>
+<tr><td>Notion Bridge</td><td>trace_linker出力→Notion DB 同期</td></tr>
+<tr><td>Error Auto-Report</td><td>stderr 内容をAI監視プロセスに転送</td></tr>
+</table>
+
+</body></html>

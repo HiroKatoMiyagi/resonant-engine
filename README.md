@@ -10,40 +10,51 @@ a harmony between thought, structure, and execution.
 
 ---
 
+## 🎯 What is Resonant Engine?
+
+Resonant Engineは、**AIがシステム開発の経過を継続的に理解し、あなたの開発を支援するための基盤**です。
+
+単なるGitOpsツールではありません。これは：
+- 開発の**意図**を記録
+- システムの**行動**を追跡
+- 変更の**結果**を検証
+- すべてを**因果関係**で繋げる
+
+統合イベントストリームにより、「なぜこの変更が起きたか」を遡ることができます。
+
+### v1.1の新機能: 統一イベントストリーム
+
+```bash
+# 開発意図を記録
+$ python utils/record_intent.py "ユーザー認証機能の追加"
+
+# 最近の活動を確認
+$ python utils/trace_events.py recent
+
+# 因果関係を遡る
+$ python utils/trace_events.py causality <EventID>
+```
+
+詳細: [クイックスタートガイド](docs/quick_start_unified_stream.md)
+
+---
+
+## 📚 Documentation
+
+- [アーキテクチャ概要](docs/architecture/kiro_v3.1_architecture.md)
+- [統合設計書](docs/integration_design.md)
+- [統合完了報告](docs/integration_complete.md)
+- [クイックスタート](docs/quick_start_unified_stream.md)
+
+### Notion統合
+- [Notionセットアップガイド](docs/notion_setup_guide.md)
+- [Notion統合サマリー](docs/notion_integration_summary.md)
+- [環境変数テンプレート](docs/env_template.txt)
+
+---
+
 **Author:** 宏啓 加藤 (Hiroaki Kato)  
 **Central Core:** Yuno (GPT-5)  
-**Repository:** [resonant-engine](https://github.com/HiroKatoMiyagi/resonant-engine)test push Fri Oct 31 15:41:43 JST 2025
-trace log Fri Oct 31 15:47:38 JST 2025
-
-Update test: 2025-10-31 16:00:36
-Timestamp test 2025-10-31 16:04:07
-
-Resonant Trace Bridge timestamp validation test Fri Oct 31 16:12:43 JST 2025
-🔁 Trace Bridge re-test 2025-10-31 16:18:14
-# Auto Trace Test
-External test Sat Nov  1 12:31:28 JST 2025
-auto_reflect update
-# external test Sat Nov  1 13:51:00 JST 2025
-# external test Sat Nov  1 13:52:59 JST 2025
-# auto_reflect test Sat Nov  1 13:54:14 JST 2025
-# auto_reflect test Sat Nov  1 13:56:22 JST 2025
-# external test Sat Nov  1 14:03:06 JST 2025
-# auto_reflect test Sat Nov  1 14:03:19 JST 2025
-# auto_reflect test Sat Nov  1 14:10:01 JST 2025
-# auto_reflect test Sat Nov  1 14:17:38 JST 2025
-# external update test Sat Nov  1 14:21:41 JST 2025
-# external update test Sat Nov  1 14:25:23 JST 2025
-# auto reflect test Sat Nov  1 14:53:52 JST 2025
-
-
-External update test – 2025-11-01
-# external_update test – Resonant Trace Validation (CLI)
-# external_update test – HypothesisTrace logging
-# external_update test Sat Nov  1 18:00:05 JST 2025
-# external_update from tmp Sat Nov  1 18:06:35 JST 2025
-external_update: test trigger Sat Nov  1 18:29:55 JST 2025
-# test external_update Sat Nov  1 18:34:17 JST 2025
-# another update Sat Nov  1 18:36:21 JST 2025
-# re-evaluation test Sat Nov  1 18:38:57 JST 2025
-# re-eval Sat Nov  1 18:43:48 JST 2025
-# external_update test Sat Nov  1 18:53:07 JST 2025
+**Repository:** [resonant-engine](https://github.com/HiroKatoMiyagi/resonant-engine)  
+**Version:** 1.1 (Unified Event Stream Integration)  
+**Last Updated:** 2025-11-05

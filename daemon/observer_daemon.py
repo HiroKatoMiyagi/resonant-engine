@@ -4,16 +4,19 @@
 #  - duplicate detection (intent_hash & commit)
 #  - unified log_hypothesis_event()
 #  - phase=external_sync_validation 付与
+#  - 統一イベントストリーム統合 (v1.1)
 
 # noqa: S603, S607  # subprocess usage intentionally allowed for controlled git commands
 import sys
 import os
 sys.path.append(os.path.dirname(__file__))  # allow importing from daemon directory
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))  # allow importing utils
 import subprocess
 import time
 import datetime
 from daemon import log_archiver
 from daemon.hypothesis_trace import HypothesisTrace
+from utils.resonant_event_stream import get_stream
 
  # --- Ensure absolute and consistent logs directory ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -119,6 +122,20 @@ def main():
                     log(f"[archive] failed during auto_reflect: {e}")
             elif "external_update" in last_commit_msg:
                 log("[🪞 External Resonance] External update detected — pulling latest changes.")
+                
+                # --- イベントストリーム: 観測イベント記録 ---
+                stream = get_stream()
+                observation_id = stream.emit(
+                    event_type="observation",
+                    source="observer_daemon",
+                    data={
+                        "observation": "external_update_detected",
+                        "commit_message": last_commit_msg,
+                        "branch": "origin/main"
+                    },
+                    tags=["git", "external_update"]
+                )
+                
                 # --- Debounce: skip if last recorded commit is identical ---
                 last_record_file = os.path.join(LOG_DIR, "last_commit.txt")
                 last_commit = run_command("git rev-parse origin/main").strip()
@@ -128,11 +145,30 @@ def main():
                         prev_commit = f.read().strip()
                 if prev_commit == last_commit:
                     log(f"[⏸️ Debounce] Skipping duplicate external update for commit {last_commit}.")
+                    stream.emit(
+                        event_type="result",
+                        source="observer_daemon",
+                        data={"status": "skipped", "reason": "duplicate_commit"},
+                        parent_event_id=observation_id
+                    )
                     time.sleep(CHECK_INTERVAL)
                     continue
                 with open(last_record_file, "w") as f:
                     f.write(last_commit)
 
+                # --- イベントストリーム: Git Pull実行 ---
+                action_id = stream.emit(
+                    event_type="action",
+                    source="observer_daemon",
+                    data={
+                        "action": "git_pull",
+                        "target": "origin/main",
+                        "commit": last_commit
+                    },
+                    parent_event_id=observation_id,
+                    tags=["git", "pull"]
+                )
+                
                 pull_output = run_command("git pull origin main")
                 # --- Step 1: result_diff連携強化 ---
                 result_diff = run_command("git diff origin/main..HEAD")
@@ -150,6 +186,21 @@ def main():
                         target_files=["daemon/observer_daemon.py"]
                     )
                     log_hypothesis_event("record", hyp_id, phase="external_sync_validation")
+                    
+                    # --- イベントストリーム: 仮説記録 ---
+                    hypothesis_event_id = stream.emit(
+                        event_type="hypothesis",
+                        source="hypothesis_trace",
+                        data={
+                            "hypothesis_id": hyp_id,
+                            "intent": "observer_daemon外部更新検知",
+                            "expected_effect": "外部commitをpullして同期"
+                        },
+                        parent_event_id=action_id,
+                        related_hypothesis_id=hyp_id,
+                        tags=["hypothesis", "external_sync"]
+                    )
+                    
                     if not hasattr(tracer, "update"):
                         log("[⚠️ result_diff integration skipped: HypothesisTrace.update() not supporting result_diff_path]")
                     with open(diff_path, "r") as df:
@@ -163,8 +214,34 @@ def main():
                         result_diff=diff_content
                     )
                     log_hypothesis_event("update", hyp_id, "validated", phase="external_sync_validation")
+                    
+                    # --- イベントストリーム: 検証結果 ---
+                    stream.emit(
+                        event_type="result",
+                        source="observer_daemon",
+                        data={
+                            "status": "validated",
+                            "hypothesis_id": hyp_id,
+                            "commit": run_command("git rev-parse HEAD"),
+                            "diff_path": diff_path
+                        },
+                        parent_event_id=hypothesis_event_id,
+                        related_hypothesis_id=hyp_id,
+                        tags=["validation", "success"]
+                    )
                 except Exception as e:
                     log(f"[archive] failed during external_update: {e}")
+                    # --- イベントストリーム: エラー記録 ---
+                    stream.emit(
+                        event_type="result",
+                        source="observer_daemon",
+                        data={
+                            "status": "error",
+                            "error": str(e)
+                        },
+                        parent_event_id=action_id,
+                        tags=["error"]
+                    )
             elif diff_output:
                 log("🔔 Detected updates on remote main branch:")
                 log(diff_output)

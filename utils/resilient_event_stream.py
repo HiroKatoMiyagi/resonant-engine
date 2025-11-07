@@ -16,6 +16,9 @@ from typing import Optional, Dict, Any, List, Literal, Callable
 from enum import Enum
 import time
 
+# リトライ戦略（P2-1）
+from utils.retry_strategy import RetryStrategy, ExponentialBackoffStrategy
+
 # メトリクス収集（P1-4）
 try:
     from utils.metrics_collector import get_metrics_collector
@@ -53,20 +56,32 @@ class ResilientEventStream:
                  dead_letter_path: Path = None,
                  max_retries: int = 3,
                  retry_backoff_base: float = 2.0,
-                 enable_metrics: bool = True):
+                 enable_metrics: bool = True,
+                 retry_strategy: Optional[RetryStrategy] = None):
         """
         Args:
             stream_path: イベントストリームファイルパス
             dead_letter_path: デッドレターキューファイルパス
             max_retries: デフォルトの最大リトライ回数
-            retry_backoff_base: エクスポネンシャルバックオフの基数
+            retry_backoff_base: エクスポネンシャルバックオフの基数（後方互換性のため残す）
             enable_metrics: メトリクス収集を有効化
+            retry_strategy: リトライ戦略（Noneの場合はExponentialBackoff）
         """
         base_dir = Path(__file__).parent.parent / "logs"
         self.stream_path = stream_path or base_dir / "event_stream.jsonl"
         self.dead_letter_path = dead_letter_path or base_dir / "dead_letter_queue.jsonl"
         self.max_retries = max_retries
         self.retry_backoff_base = retry_backoff_base
+        
+        # リトライ戦略の初期化（P2-1, P2-3）
+        if retry_strategy is None:
+            # デフォルトはExponentialBackoff（既存動作を維持）
+            self.retry_strategy = ExponentialBackoffStrategy(
+                base=retry_backoff_base,
+                max_backoff=300.0  # 5分上限（P2-3）
+            )
+        else:
+            self.retry_strategy = retry_strategy
         
         self.stream_path.parent.mkdir(parents=True, exist_ok=True)
         self.dead_letter_path.parent.mkdir(parents=True, exist_ok=True)
@@ -234,10 +249,8 @@ class ResilientEventStream:
                 
                 # リトライ可能な場合
                 if retry_count < max_retries:
-                    # バックオフ時間を計算（ジッター追加）
-                    backoff_seconds = self.retry_backoff_base ** retry_count
-                    jitter = random.uniform(0.8, 1.2)  # ±20% のランダムジッター
-                    backoff_seconds *= jitter
+                    # バックオフ時間を計算（戦略ベース、ジッター適用済み）
+                    backoff_seconds = self.retry_strategy.get_backoff_with_jitter(retry_count)
                     next_retry_at = datetime.now() + timedelta(seconds=backoff_seconds)
                     
                     retry_info = {
@@ -266,7 +279,7 @@ class ResilientEventStream:
                     # リカバリーアクションを記録
                     recovery_actions.append({
                         "timestamp": datetime.now().isoformat(),
-                        "action": "exponential_backoff",
+                        "action": self.retry_strategy.get_strategy_name(),
                         "backoff_seconds": backoff_seconds,
                         "event_id": retry_event_id
                     })

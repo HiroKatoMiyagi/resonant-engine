@@ -12,6 +12,17 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
+# Rich ライブラリ（P2-2）
+try:
+    from rich.console import Console
+    from rich.table import Table
+    from rich.panel import Panel
+    from rich.progress import Progress
+    from rich import box
+    RICH_AVAILABLE = True
+except ImportError:
+    RICH_AVAILABLE = False
+
 # プロジェクトルートをパスに追加
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -21,21 +32,80 @@ from utils.metrics_collector import get_metrics_collector
 class ErrorRecoveryCLI:
     """エラーリカバリー用CLIツール"""
     
-    def __init__(self):
+    def __init__(self, use_rich: bool = True):
+        """
+        Args:
+            use_rich: Rich形式の出力を使用（デフォルト: True）
+        """
         self.stream = ResilientEventStream()
         self.metrics = get_metrics_collector()
+        self.use_rich = use_rich and RICH_AVAILABLE
+        
+        if self.use_rich:
+            self.console = Console()
     
     def show_status(self):
         """エラー状況の概要を表示"""
+        failed = self.stream.get_failed_events()
+        dlq = self.stream.get_dead_letter_queue()
+        retry_candidates = self.stream.get_retry_candidates()
+        
+        if self.use_rich:
+            self._show_status_rich(failed, dlq, retry_candidates)
+        else:
+            self._show_status_plain(failed, dlq, retry_candidates)
+    
+    def _show_status_rich(self, failed, dlq, retry_candidates):
+        """Rich形式でステータス表示"""
+        # パネル作成
+        title = Panel.fit(
+            "📊 Resonant Engine - Error Recovery Status",
+            border_style="bold blue"
+        )
+        self.console.print(title)
+        self.console.print()
+        
+        # 統計テーブル
+        table = Table(title="Error Statistics", box=box.ROUNDED)
+        table.add_column("Type", style="cyan", no_wrap=True)
+        table.add_column("Count", justify="right", style="magenta")
+        table.add_column("Status", justify="center")
+        
+        table.add_row("Failed Events", str(len(failed)), "❌")
+        table.add_row("Dead Letter Queue", str(len(dlq)), "💀")
+        table.add_row("Retry Candidates", str(len(retry_candidates)), "🔄")
+        
+        self.console.print(table)
+        self.console.print()
+        
+        if not dlq and not failed:
+            self.console.print("✅ [bold green]No errors detected - system is healthy![/bold green]")
+            return
+        
+        # エラーカテゴリ別集計
+        error_by_category = {}
+        for event in dlq + failed:
+            error_info = event.get("error_info", {})
+            category = error_info.get("category", "unknown")
+            error_by_category[category] = error_by_category.get(category, 0) + 1
+        
+        if error_by_category:
+            cat_table = Table(title="Error Breakdown", box=box.SIMPLE)
+            cat_table.add_column("Category", style="yellow")
+            cat_table.add_column("Count", justify="right", style="cyan")
+            
+            for category, count in error_by_category.items():
+                emoji = "⚡" if category == "transient" else "🚫" if category == "permanent" else "❓"
+                cat_table.add_row(f"{emoji} {category}", str(count))
+            
+            self.console.print(cat_table)
+    
+    def _show_status_plain(self, failed, dlq, retry_candidates):
+        """プレーン形式でステータス表示"""
         print("=" * 60)
         print("📊 Resonant Engine - Error Recovery Status")
         print("=" * 60)
         print()
-        
-        # 統計情報
-        failed = self.stream.get_failed_events()
-        dlq = self.stream.get_dead_letter_queue()
-        retry_candidates = self.stream.get_retry_candidates()
         
         print(f"❌ Failed Events: {len(failed)}")
         print(f"💀 Dead Letter Queue: {len(dlq)}")
@@ -61,34 +131,123 @@ class ErrorRecoveryCLI:
     
     def list_dead_letter_queue(self, limit: int = 20):
         """デッドレターキューを一覧表示"""
+        dlq_events = self.stream.get_dead_letter_queue(limit=limit)
+        
+        if not dlq_events:
+            if self.use_rich:
+                self.console.print("✅ [bold green]Dead letter queue is empty![/bold green]")
+            else:
+                print("✅ Dead letter queue is empty!")
+            return
+        
+        if self.use_rich:
+            self._list_dlq_rich(dlq_events)
+        else:
+            self._list_dlq_plain(dlq_events)
+    
+    def _list_dlq_rich(self, dlq_events):
+        """Rich形式でDLQ一覧表示"""
+        table = Table(title="💀 Dead Letter Queue", box=box.ROUNDED)
+        table.add_column("#", justify="right", style="cyan", no_wrap=True)
+        table.add_column("Event ID", style="magenta")
+        table.add_column("Timestamp", style="green")
+        table.add_column("Error", style="red", overflow="fold")
+        table.add_column("Category", justify="center")
+        table.add_column("Retries", justify="right")
+        
+        for i, event in enumerate(dlq_events, 1):
+            error_info = event.get("error_info", {})
+            retry_info = event.get("retry_info", {})
+            
+            category = error_info.get("category", "unknown")
+            emoji = "⚡" if category == "transient" else "🚫"
+            
+            event_id = event['event_id']
+            if len(event_id) > 25:
+                event_id = event_id[:22] + "..."
+            
+            error_msg = error_info.get('message', 'N/A')
+            if len(error_msg) > 40:
+                error_msg = error_msg[:37] + "..."
+            
+            table.add_row(
+                str(i),
+                event_id,
+                event['timestamp'][:19],
+                error_msg,
+                f"{emoji} {category}",
+                f"{retry_info.get('count', 0)}/{retry_info.get('max_retries', 0)}"
+            )
+        
+        self.console.print(table)
+    
+    def _list_dlq_plain(self, dlq_events):
+        """プレーン形式でDLQ一覧表示"""
         print("=" * 60)
         print("💀 Dead Letter Queue")
         print("=" * 60)
         print()
-        
-        dlq_events = self.stream.get_dead_letter_queue(limit=limit)
-        
-        if not dlq_events:
-            print("✅ Dead letter queue is empty!")
-            return
         
         for i, event in enumerate(dlq_events, 1):
             self._print_event_summary(i, event, show_details=False)
     
     def list_failed_events(self, limit: int = 20):
         """失敗イベントを一覧表示"""
+        failed = self.stream.get_failed_events(limit=limit)
+        
+        if not failed:
+            if self.use_rich:
+                self.console.print("✅ [bold green]No failed events![/bold green]")
+            else:
+                print("✅ No failed events!")
+            return
+        
+        if self.use_rich:
+            self._list_failed_rich(failed)
+        else:
+            self._list_failed_plain(failed)
+    
+    def _list_failed_rich(self, failed_events):
+        """Rich形式で失敗イベント一覧表示"""
+        table = Table(title="❌ Failed Events", box=box.ROUNDED)
+        table.add_column("#", justify="right", style="cyan", no_wrap=True)
+        table.add_column("Event ID", style="magenta")
+        table.add_column("Timestamp", style="green")
+        table.add_column("Error", style="red", overflow="fold")
+        table.add_column("Category", justify="center")
+        
+        for i, event in enumerate(failed_events, 1):
+            error_info = event.get("error_info", {})
+            
+            category = error_info.get("category", "unknown")
+            emoji = "⚡" if category == "transient" else "🚫" if category == "permanent" else "❓"
+            
+            event_id = event['event_id']
+            if len(event_id) > 25:
+                event_id = event_id[:22] + "..."
+            
+            error_msg = error_info.get('message', 'N/A')
+            if len(error_msg) > 40:
+                error_msg = error_msg[:37] + "..."
+            
+            table.add_row(
+                str(i),
+                event_id,
+                event['timestamp'][:19],
+                error_msg,
+                f"{emoji} {category}"
+            )
+        
+        self.console.print(table)
+    
+    def _list_failed_plain(self, failed_events):
+        """プレーン形式で失敗イベント一覧表示"""
         print("=" * 60)
         print("❌ Failed Events")
         print("=" * 60)
         print()
         
-        failed = self.stream.get_failed_events(limit=limit)
-        
-        if not failed:
-            print("✅ No failed events!")
-            return
-        
-        for i, event in enumerate(failed, 1):
+        for i, event in enumerate(failed_events, 1):
             self._print_event_summary(i, event, show_details=False)
     
     def list_retry_candidates(self):
@@ -401,6 +560,11 @@ def main():
     """CLIエントリーポイント"""
     import argparse
     
+    # 共通オプション用の親パーサー（P2-2）
+    parent_parser = argparse.ArgumentParser(add_help=False)
+    parent_parser.add_argument("--plain", action="store_true", 
+                              help="Use plain text output (disable rich formatting)")
+    
     parser = argparse.ArgumentParser(
         description="Error Recovery CLI - Manage failed events and dead letter queue"
     )
@@ -408,45 +572,46 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
     # status コマンド
-    subparsers.add_parser("status", help="Show error recovery status")
+    subparsers.add_parser("status", help="Show error recovery status", parents=[parent_parser])
     
     # dlq コマンド
-    dlq_parser = subparsers.add_parser("dlq", help="List dead letter queue")
+    dlq_parser = subparsers.add_parser("dlq", help="List dead letter queue", parents=[parent_parser])
     dlq_parser.add_argument("--limit", type=int, default=20, help="Maximum events to show")
     
     # failed コマンド
-    failed_parser = subparsers.add_parser("failed", help="List failed events")
+    failed_parser = subparsers.add_parser("failed", help="List failed events", parents=[parent_parser])
     failed_parser.add_argument("--limit", type=int, default=20, help="Maximum events to show")
     
     # retry-candidates コマンド
-    subparsers.add_parser("retry-candidates", help="List retry candidates")
+    subparsers.add_parser("retry-candidates", help="List retry candidates", parents=[parent_parser])
     
     # detail コマンド
-    detail_parser = subparsers.add_parser("detail", help="Show event detail")
+    detail_parser = subparsers.add_parser("detail", help="Show event detail", parents=[parent_parser])
     detail_parser.add_argument("event_id", help="Event ID to inspect")
     
     # export コマンド
-    export_parser = subparsers.add_parser("export", help="Export error report")
+    export_parser = subparsers.add_parser("export", help="Export error report", parents=[parent_parser])
     export_parser.add_argument("--output", default="error_report.json", help="Output file path")
     
     # retry コマンド (P1-3: 新規追加)
-    retry_parser = subparsers.add_parser("retry", help="Manually retry an event from DLQ")
+    retry_parser = subparsers.add_parser("retry", help="Manually retry an event from DLQ", parents=[parent_parser])
     retry_parser.add_argument("event_id", help="Event ID to retry")
     
     # purge コマンド (P1-3: 新規追加)
-    purge_parser = subparsers.add_parser("purge", help="Purge old DLQ events")
+    purge_parser = subparsers.add_parser("purge", help="Purge old DLQ events", parents=[parent_parser])
     purge_parser.add_argument("--older-than", type=int, default=30, help="Delete events older than N days (default: 30)")
     
     # metrics コマンド (P1-4: 新規追加)
-    subparsers.add_parser("metrics", help="Show metrics summary")
+    subparsers.add_parser("metrics", help="Show metrics summary", parents=[parent_parser])
     
     # prometheus コマンド (P1-4: 新規追加)
-    prom_parser = subparsers.add_parser("prometheus", help="Export Prometheus metrics")
+    prom_parser = subparsers.add_parser("prometheus", help="Export Prometheus metrics", parents=[parent_parser])
     prom_parser.add_argument("--output", default="metrics.prom", help="Output file path")
     
     args = parser.parse_args()
     
-    cli = ErrorRecoveryCLI()
+    # Rich形式の使用判定（P2-2）
+    cli = ErrorRecoveryCLI(use_rich=not args.plain)
     
     if args.command == "status":
         cli.show_status()

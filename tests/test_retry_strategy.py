@@ -2,7 +2,11 @@
 リトライ戦略のユニットテスト
 """
 
-import pytest
+try:
+    import pytest
+except ImportError:
+    pytest = None
+
 from utils.retry_strategy import (
     RetryStrategy,
     ExponentialBackoffStrategy,
@@ -244,6 +248,58 @@ class TestRetryStrategyBase:
             # 大きな試行回数でもmax_backoffを超えない
             backoff = strategy.get_backoff_with_jitter(20)
             assert backoff <= 50.0, f"{strategy.get_strategy_name()} exceeded max_backoff"
+    
+    def test_max_backoff_300_seconds_boundary(self):
+        """デフォルトのmax_backoff=300.0秒での境界テスト（レビュー対応）"""
+        # ExponentialBackoff: 2^8 = 256 < 300, 2^9 = 512 > 300
+        exp_strategy = ExponentialBackoffStrategy(base=2.0, max_backoff=300.0, jitter_factor=0.0)
+        
+        # 境界値未満: 2^8 = 256秒（制限されない）
+        backoff_8 = exp_strategy.get_backoff_with_jitter(8)
+        assert backoff_8 == 256.0, f"Expected 256.0, got {backoff_8}"
+        
+        # 境界値超過: 2^9 = 512秒 → 300秒に制限される
+        backoff_9 = exp_strategy.get_backoff_with_jitter(9)
+        assert backoff_9 == 300.0, f"Expected 300.0 (max_backoff), got {backoff_9}"
+        
+        # さらに大きな値でも300秒に制限される
+        backoff_20 = exp_strategy.get_backoff_with_jitter(20)
+        assert backoff_20 == 300.0, f"Expected 300.0 (max_backoff), got {backoff_20}"
+        
+        # LinearBackoff: 1 + 2*150 = 301 > 300
+        linear_strategy = LinearBackoffStrategy(
+            initial_delay=1.0,
+            increment=2.0,
+            max_backoff=300.0,
+            jitter_factor=0.0
+        )
+        # 境界値未満: 1 + 2*149 = 299秒（制限されない）
+        backoff_149 = linear_strategy.get_backoff_with_jitter(149)
+        assert backoff_149 == 299.0, f"Expected 299.0, got {backoff_149}"
+        
+        # 境界値超過: 1 + 2*150 = 301秒 → 300秒に制限される
+        backoff_150 = linear_strategy.get_backoff_with_jitter(150)
+        assert backoff_150 == 300.0, f"Expected 300.0 (max_backoff), got {backoff_150}"
+        
+        # ConstantBackoff: delay=500 > 300
+        const_strategy = ConstantBackoffStrategy(delay=500.0, max_backoff=300.0, jitter_factor=0.0)
+        # 常に300秒に制限される
+        backoff_const = const_strategy.get_backoff_with_jitter(0)
+        assert backoff_const == 300.0, f"Expected 300.0 (max_backoff), got {backoff_const}"
+        
+        # FibonacciBackoff: fib(12) = 233 < 300, fib(13) = 377 > 300
+        fib_strategy = FibonacciBackoffStrategy(unit=1.0, max_backoff=300.0, jitter_factor=0.0)
+        # 境界値未満: fib(12) = 233 < 300（制限されない）
+        backoff_12 = fib_strategy.get_backoff_with_jitter(12)
+        assert backoff_12 == 233.0, f"Expected 233.0, got {backoff_12}"
+        
+        # 境界値超過: fib(13) = 377 → 300秒に制限される
+        backoff_13 = fib_strategy.get_backoff_with_jitter(13)
+        assert backoff_13 == 300.0, f"Expected 300.0 (max_backoff), got {backoff_13}"
+        
+        # さらに大きな値でも300秒に制限される
+        backoff_14 = fib_strategy.get_backoff_with_jitter(14)
+        assert backoff_14 == 300.0, f"Expected 300.0 (max_backoff), got {backoff_14}"
 
 
 class TestResilientStreamIntegration:

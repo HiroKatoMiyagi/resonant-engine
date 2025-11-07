@@ -1,0 +1,12 @@
+# Resonant Engine - Python Dependencies
+
+# P2-2: CLI visualization
+rich>=13.0.0
+
+# Core dependencies (likely already installed)
+requests>=2.28.0
+
+# Optional: Testing
+# pytest>=7.0.0
+# pytest-cov>=4.0.0
+

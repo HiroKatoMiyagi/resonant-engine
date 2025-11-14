@@ -1,5 +1,5 @@
 #!/bin/zsh
-ROOT="/Users/zero/Projects/kiro-v3.1"
+ROOT="/Users/zero/Projects/resonant-engine"
 LOG="$ROOT/logs/reval_bridge.log"
 STATE="$ROOT/logs/resonant_state.log"
 TS=$(date '+%Y-%m-%d %H:%M:%S')
@@ -25,6 +25,6 @@ if [ -f "$INTENT_FILE" ]; then
   INTENT=$(cat "$INTENT_FILE")
   if echo "$INTENT" | grep -q "push_to_notion"; then
     echo "[$TS] 🚀 Initiating Notion Archive Sync..." >> "$LOG"
-    /Users/zero/Projects/kiro-v3.1/scripts/notion_archive_push.sh &
+    $ROOT/scripts/notion_archive_push.sh &
   fi
 fi

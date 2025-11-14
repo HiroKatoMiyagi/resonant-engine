@@ -13,6 +13,15 @@ Resonant Event Stream - 全イベントの統一記録層
 - observer_daemon.log
 
 を統合し、「点」を「線」に変える。
+
+Event Type Taxonomy（イベント種別分類）:
+- intent: 人間またはAIの意図表明
+- action: システムの行動（Git pull、Webhook受信など）
+- result: 行動の結果
+- observation: 観測・監視イベント
+- hypothesis: 仮説の記録・更新
+- error: エラーイベント（専用）
+- retry: リトライイベント
 """
 
 import json
@@ -43,7 +52,13 @@ class ResonantEventStream:
              data: Dict[str, Any],
              parent_event_id: Optional[str] = None,
              related_hypothesis_id: Optional[str] = None,
-             tags: Optional[List[str]] = None
+             tags: Optional[List[str]] = None,
+             latency_ms: Optional[int] = None,
+             exit_code: Optional[int] = None,
+             importance: int = 3,
+             status: Optional[str] = None,
+             error_info: Optional[Dict[str, Any]] = None,
+             retry_info: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         統一イベントを記録し、イベントIDを返す
@@ -55,11 +70,28 @@ class ResonantEventStream:
             parent_event_id: 親イベントID（因果関係）
             related_hypothesis_id: 関連する仮説ID
             tags: タグリスト（検索用）
+            latency_ms: 処理時間（ミリ秒）
+            exit_code: コマンド実行結果（0=成功、非0=失敗）
+            importance: 重要度（1=低 ~ 5=高、デフォルト=3）
+            status: ステータス（pending/running/success/failed/retrying）
+            error_info: エラー情報（error_type, error_message, error_category, stack_trace等）
+            retry_info: リトライ情報（retry_count, max_retries, next_retry_at等）
         
         Returns:
             生成されたイベントID
         """
         event_id = f"EVT-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
+        
+        # ステータスの自動判定
+        if status is None:
+            if exit_code is not None:
+                status = "success" if exit_code == 0 else "failed"
+            elif error_info:
+                status = "failed"
+            elif retry_info:
+                status = "retrying"
+            else:
+                status = "pending"
         
         event = {
             "event_id": event_id,
@@ -69,13 +101,19 @@ class ResonantEventStream:
             "data": data,
             "parent_event_id": parent_event_id,
             "related_hypothesis_id": related_hypothesis_id,
-            "tags": tags or []
+            "tags": tags or [],
+            "latency_ms": latency_ms,
+            "exit_code": exit_code,
+            "importance": importance,
+            "status": status,
+            "error_info": error_info,
+            "retry_info": retry_info
         }
         
         with open(self.stream_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(event, ensure_ascii=False) + "\n")
         
-        print(f"[📡 Event Emitted] {event_id}: {event_type} from {source}")
+        print(f"[📡 Event Emitted] {event_id}: {event_type} from {source} [{status}]")
         return event_id
     
     def query(self, 

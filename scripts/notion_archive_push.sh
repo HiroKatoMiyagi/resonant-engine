@@ -4,7 +4,7 @@
 # Resonant Archive System → Notion 同期スクリプト
 # ──────────────────────────────────────────────
 
-ROOT="/Users/zero/Projects/kiro-v3.1"
+ROOT="/Users/zero/Projects/resonant-engine"
 LOG="$ROOT/logs/reval_bridge.log"
 TS=$(date '+%Y-%m-%d %H:%M:%S')
 

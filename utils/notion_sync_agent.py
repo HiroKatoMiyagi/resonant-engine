@@ -32,6 +32,12 @@ except ImportError:
 # utils/ からの import
 sys.path.append(str(Path(__file__).parent))
 from resonant_event_stream import get_stream
+from error_recovery import (
+    with_retry,
+    ErrorClassifier,
+    RetryStrategy,
+    DeadLetterQueue
+)
 
 load_dotenv()
 
@@ -62,6 +68,7 @@ class NotionSyncAgent:
         # Notion Client（APIバージョン指定が必要）
         self.client = Client(auth=NOTION_TOKEN, notion_version="2022-06-28")
         self.stream = get_stream()
+        self.dlq = DeadLetterQueue()
         
         # データベースID（UUID形式に変換）
         self.specs_db_id = self._format_uuid(SPECS_DB_ID)
@@ -85,6 +92,42 @@ class NotionSyncAgent:
         
         # UUID形式（8-4-4-4-12）に変換
         return f"{id_clean[0:8]}-{id_clean[8:12]}-{id_clean[12:16]}-{id_clean[16:20]}-{id_clean[20:32]}"
+    
+    def _handle_retry(self, event_id: str, attempt: int, error: Exception, error_classifier: ErrorClassifier):
+        """リトライ時の処理"""
+        error_category = error_classifier.classify_error(error)
+        
+        # リトライイベントを記録
+        self.stream.emit(
+            event_type="retry",
+            source="notion_sync",
+            data={
+                "parent_event_id": event_id,
+                "attempt": attempt,
+                "error": str(error),
+                "error_type": type(error).__name__
+            },
+            parent_event_id=event_id,
+            tags=["notion", "retry"],
+            status="retrying",
+            error_info={
+                "error_type": type(error).__name__,
+                "error_message": str(error),
+                "error_category": error_category.value
+            },
+            retry_info={
+                "retry_count": attempt,
+                "retryable": True
+            }
+        )
+        print(f"🔄 リトライ {attempt}: {type(error).__name__}: {error}")
+    
+    def _handle_failure(self, event_id: str, error: Exception, error_classifier: ErrorClassifier, retry_count: int):
+        """最終失敗時の処理"""
+        error_category = error_classifier.classify_error(error)
+        
+        # 失敗イベントは既にメイン処理で記録されるため、ここではログのみ
+        print(f"❌ 最終失敗（リトライ回数: {retry_count}）: {type(error).__name__}: {error}")
     
     # ============================================
     # 1. Specs DB（仕様書）の監視
@@ -113,7 +156,18 @@ class NotionSyncAgent:
             tags=["notion", "specs", "sync"]
         )
         
-        try:
+        # エラー分類とリカバリー戦略の取得
+        error_category = None
+        retry_count = 0
+        
+        def fetch_specs():
+            """仕様書取得の内部関数（リトライ対象）"""
+            nonlocal retry_count
+            retry_count += 1
+            
+            import time
+            start_time = time.time()
+            
             # Notion API: データベースクエリ（requestメソッドを直接使用）
             # 「同期トリガー」はCheckbox型なので、checkbox filterを使用
             response = self.client.request(
@@ -128,6 +182,8 @@ class NotionSyncAgent:
                     }
                 }
             )
+            
+            latency_ms = int((time.time() - start_time) * 1000)
             
             specs = []
             for page in response.get("results", []):
@@ -145,8 +201,40 @@ class NotionSyncAgent:
                         "memo": spec.get("memo", "")[:100]  # 長すぎる場合は切り詰め
                     },
                     parent_event_id=sync_id,
-                    tags=["notion", "spec", "trigger"]
+                    tags=["notion", "spec", "trigger"],
+                    latency_ms=latency_ms
                 )
+            
+            return specs
+        
+        # エラー分類器の初期化
+        error_classifier = ErrorClassifier()
+        
+        # デフォルトのリトライ戦略（エラーが発生したら動的に変更）
+        strategy = RetryStrategy(
+            max_retries=3,
+            initial_delay=1.0,
+            max_delay=60.0,
+            exponential_base=2.0
+        )
+        
+        try:
+            # 自動リトライ付きで実行
+            specs = with_retry(
+                fetch_specs,
+                strategy=strategy,
+                error_context={
+                    "action": "fetch_specs",
+                    "database": "specs",
+                    "database_id": self.specs_db_id
+                },
+                on_retry=lambda attempt, error: self._handle_retry(
+                    sync_id, attempt, error, error_classifier
+                ),
+                on_failure=lambda error: self._handle_failure(
+                    sync_id, error, error_classifier, retry_count
+                )
+            )
             
             # イベント記録: 取得成功
             self.stream.emit(
@@ -157,13 +245,25 @@ class NotionSyncAgent:
                     "specs_count": len(specs)
                 },
                 parent_event_id=sync_id,
-                tags=["notion", "success"]
+                tags=["notion", "success"],
+                status="success"
             )
             
             return specs
             
         except Exception as e:
-            # イベント記録: エラー
+            # エラー分類
+            error_category = ErrorClassifier.classify_error(e)
+            
+            # イベント記録: エラー（構造化されたエラー情報）
+            import traceback
+            error_info = {
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "error_category": error_category.value,
+                "stack_trace": traceback.format_exc()
+            }
+            
             self.stream.emit(
                 event_type="result",
                 source="notion_sync",
@@ -173,10 +273,31 @@ class NotionSyncAgent:
                     "error_type": type(e).__name__
                 },
                 parent_event_id=sync_id,
-                tags=["notion", "error"]
+                tags=["notion", "error"],
+                status="failed",
+                error_info=error_info,
+                retry_info={
+                    "retry_count": retry_count,
+                    "max_retries": strategy.max_retries if 'strategy' in locals() else 0,
+                    "retryable": ErrorClassifier.is_retryable(e)
+                }
             )
+            
+            # リトライ不可能なエラーはデッドレターキューに追加
+            if not ErrorClassifier.is_retryable(e):
+                self.dlq.add(
+                    event_id=sync_id,
+                    error=e,
+                    error_category=error_category,
+                    context={
+                        "action": "fetch_specs",
+                        "database": "specs",
+                        "database_id": self.specs_db_id
+                    },
+                    retry_count=retry_count
+                )
+            
             print(f"❌ Specs DB取得エラー: {type(e).__name__}: {e}")
-            import traceback
             print(f"詳細:\n{traceback.format_exc()}")
             return []
     

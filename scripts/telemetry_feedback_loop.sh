@@ -1,5 +1,5 @@
 #!/bin/zsh
-ROOT="/Users/zero/Projects/kiro-v3.1"
+ROOT="/Users/zero/Projects/resonant-engine"
 LOG="$ROOT/logs/telemetry_feedback.log"
 TS=$(date '+%Y-%m-%d %H:%M:%S')
 

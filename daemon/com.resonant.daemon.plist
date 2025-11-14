@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- サービス名 -->
+    <key>Label</key>
+    <string>com.resonant.daemon</string>
+    
+    <!-- 実行プログラム -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/zero/Projects/resonant-engine/venv/bin/python</string>
+        <string>/Users/zero/Projects/resonant-engine/daemon/resonant_daemon_db.py</string>
+    </array>
+    
+    <!-- 作業ディレクトリ -->
+    <key>WorkingDirectory</key>
+    <string>/Users/zero/Projects/resonant-engine</string>
+    
+    <!-- 環境変数 -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>/Users/zero/Projects/resonant-engine</string>
+        <key>PATH</key>
+        <string>/Users/zero/Projects/resonant-engine/venv/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    
+    <!-- 自動起動設定 -->
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <!-- クラッシュ時の自動再起動 -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+    
+    <!-- 標準出力ログ -->
+    <key>StandardOutPath</key>
+    <string>/Users/zero/Projects/resonant-engine/daemon/logs/stdout.log</string>
+    
+    <!-- 標準エラー出力ログ -->
+    <key>StandardErrorPath</key>
+    <string>/Users/zero/Projects/resonant-engine/daemon/logs/stderr.log</string>
+    
+    <!-- プロセス優先度（-20〜20, デフォルト0） -->
+    <key>Nice</key>
+    <integer>0</integer>
+    
+    <!-- 起動間隔制限（再起動しすぎ防止） -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    
+    <!-- セッション種別 -->
+    <key>SessionType</key>
+    <string>Aqua</string>
+</dict>
+</plist>

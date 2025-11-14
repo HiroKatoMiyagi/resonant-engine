@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resonant Engine ドキュメント</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+        
+        header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 2rem;
+        }
+        
+        .section {
+            margin-bottom: 3rem;
+        }
+        
+        .section-title {
+            font-size: 1.8rem;
+            color: #667eea;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        .doc-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .doc-card {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+        
+        .doc-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+            border-color: #667eea;
+        }
+        
+        .doc-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            color: #2d3748;
+        }
+        
+        .doc-card p {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+        
+        .doc-card a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            display: inline-block;
+            margin-top: 0.5rem;
+            margin-right: 0.5rem;
+        }
+        
+        .doc-card a:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+        
+        .doc-list {
+            list-style: none;
+            margin-top: 1rem;
+        }
+        
+        .doc-list li {
+            background: #f8f9fa;
+            margin-bottom: 0.5rem;
+            padding: 1rem;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+            transition: all 0.2s ease;
+        }
+        
+        .doc-list li:hover {
+            background: #e9ecef;
+            transform: translateX(4px);
+        }
+        
+        .doc-list a {
+            color: #2d3748;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .doc-list a:hover {
+            color: #667eea;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            background: #667eea;
+            color: white;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            margin-left: 0.5rem;
+        }
+        
+        .badge.complete {
+            background: #48bb78;
+        }
+        
+        .badge.guide {
+            background: #4299e1;
+        }
+        
+        .badge.design {
+            background: #ed8936;
+        }
+        
+        .badge.implementation {
+            background: #4299e1;
+        }
+        
+        .badge.test {
+            background: #9f7aea;
+        }
+        
+        .badge.review {
+            background: #38b2ac;
+        }
+        
+        footer {
+            background: #2d3748;
+            color: white;
+            text-align: center;
+            padding: 1.5rem;
+            font-size: 0.9rem;
+        }
+        
+        .update-note {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 6px;
+            padding: 1rem;
+            margin-bottom: 2rem;
+            color: #856404;
+        }
+        
+        .subsection-title {
+            font-size: 1.3rem;
+            color: #764ba2;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌊 Resonant Engine</h1>
+            <p>自己反省型アーキテクチャシステム - ドキュメントポータル</p>
+        </header>
+        
+        <div class="content">
+            <div class="update-note">
+                <strong>📝 更新履歴:</strong> 最終更新日 2025-11-08
+            </div>
+
+            <!-- アーキテクチャ概要 -->
+            <section class="section">
+                <h2 class="section-title">📐 アーキテクチャ概要</h2>
+                <div class="doc-grid">
+
+                    <div class="doc-card">
+                        <h3>Complete Architecture Design</h3>
+                        <p>システム全体のアーキテクチャ設計書</p>
+                        <a href="complete_architecture_design.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Dashboard Platform Design</h3>
+                        <p>統合ダッシュボードプラットフォーム設計</p>
+                        <a href="dashboard_platform_design.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Kiro V3.1 Architecture</h3>
+                        <p>前身システムのアーキテクチャ参照</p>
+                        <a href="architecture/kiro_v3.1_architecture.md">📄 閲覧する</a>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- フェーズ別ドキュメント -->
+            <section class="section">
+                <h2 class="section-title">🚀 フェーズ別実装ドキュメント</h2>
+
+                <h3 class="subsection-title" style="color: #48bb78;">Phase 0: 基盤改善</h3>
+                <ul class="doc-list">
+
+                    <li><a href="Phase0/p0_improvement_completion_report.md">P0 Improvement Completion Report</a> <span class="badge">完了</span></li>
+
+                    <li><a href="Phase0/p0_improvement_guide.md">P0 Improvement Guide</a> <span class="badge">ガイド</span></li>
+
+                    <li><a href="Phase0/p0_improvement_review_request.md">P0 Improvement Review Request</a> <span class="badge">レビュー</span></li>
+
+                    <li><a href="Phase0/p0_improvement_review_response.md">P0 Improvement Review Response</a> <span class="badge">レビュー</span></li>
+
+                    <li><a href="Phase0/p0_improvement_review_result_yuno.md">P0 Improvement Review Result Yuno</a> <span class="badge">レビュー</span></li>
+
+                </ul>
+
+                <h3 class="subsection-title" style="color: #48bb78;">Phase 1: SQLite実装（スキップ）</h3>
+                <ul class="doc-list">
+
+                    <li><a href="Phase1/p1_improvement_completion_report.md">P1 Improvement Completion Report</a> <span class="badge">完了</span></li>
+
+                </ul>
+
+                <h3 class="subsection-title" style="color: #48bb78;">Phase 2: 改善項目</h3>
+                <ul class="doc-list">
+
+                    <li><a href="Phase2/p2_improvement_completion_report.md">P2 Improvement Completion Report</a> <span class="badge">完了</span></li>
+
+                    <li><a href="Phase2/p2_improvement_design_spec.md">P2 Improvement Design Spec</a> <span class="badge">設計</span></li>
+
+                    <li><a href="Phase2/p2_improvement_final_review_report.md">P2 Improvement Final Review Report</a> <span class="badge">レビュー</span></li>
+
+                    <li><a href="Phase2/p2_improvement_implementation_guide.md">P2 Improvement Implementation Guide</a> <span class="badge">ガイド</span></li>
+
+                    <li><a href="Phase2/p2_improvement_review_report.md">P2 Improvement Review Report</a> <span class="badge">レビュー</span></li>
+
+                </ul>
+
+                <h3 class="subsection-title" style="color: #48bb78;">Phase 3: PostgreSQL実装</h3>
+                <ul class="doc-list">
+
+                    <li><a href="Phase3/phase3_basic_design.md">Phase3 Basic Design</a> <span class="badge">設計</span></li>
+
+                    <li><a href="Phase3/phase3_completion_report.md">Phase3 Completion Report</a> <span class="badge">完了</span></li>
+
+                    <li><a href="Phase3/phase3_detailed_design.md">Phase3 Detailed Design</a> <span class="badge">設計</span></li>
+
+                    <li><a href="Phase3/phase3_review_report.md">Phase3 Review Report</a> <span class="badge">レビュー</span></li>
+
+                    <li><a href="Phase3/phase3_review_request.md">Phase3 Review Request</a> <span class="badge">レビュー</span></li>
+
+                    <li><a href="Phase3/phase3_review_response.md">Phase3 Review Response</a> <span class="badge">レビュー</span></li>
+
+                </ul>
+
+            </section>
+
+            <!-- 実装ロードマップ -->
+            <section class="section">
+                <h2 class="section-title">🗺️ 実装ロードマップ</h2>
+                <div class="doc-grid">
+
+                    <div class="doc-card">
+                        <h3>Implementation Roadmap Postgres</h3>
+                        <p>PostgreSQL移行の実装ロードマップ（Yuno承認済み A+評価）</p>
+                        <a href="implementation_roadmap_postgres.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Cloud Migration Strategy</h3>
+                        <p>Oracle Cloud Free Tier移行戦略</p>
+                        <a href="cloud_migration_strategy.md">📄 閲覧する</a>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- Yunoドキュメント -->
+            <section class="section">
+                <h2 class="section-title">🧠 Yuno - 思想・設計文書</h2>
+                <div class="doc-grid">
+
+                    <div class="doc-card">
+                        <h3>Crisis Index Detailed</h3>
+                        <a href="Yuno/crisis_index_detailed.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Emotion Resonance Filter Detailed</h3>
+                        <a href="Yuno/emotion_resonance_filter_detailed.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Erf Resonant Detection Quantification</h3>
+                        <a href="Yuno/erf_resonant_detection_quantification.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Intent Bridge Design Note</h3>
+                        <a href="Yuno/intent_bridge_design_note.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Re Evaluation Phase Detailed</h3>
+                        <a href="Yuno/re_evaluation_phase_detailed.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Resonant Daily Framework Detailed</h3>
+                        <a href="Yuno/resonant_daily_framework_detailed.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Resonant Feedback Loop Detailed</h3>
+                        <a href="Yuno/resonant_feedback_loop_detailed.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Resonant Four Layer Architecture</h3>
+                        <a href="Yuno/resonant_four_layer_architecture.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Resonant Operational Regulations Full</h3>
+                        <a href="Yuno/resonant_operational_regulations_full.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Resonant Scope Alignment Detailed</h3>
+                        <a href="Yuno/resonant_scope_alignment_detailed.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>The Hiroaki Model Phases Detailed</h3>
+                        <a href="Yuno/the_hiroaki_model_phases_detailed.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>The Hiroaki Model Resonant Intelligence Extension</h3>
+                        <a href="Yuno/the_hiroaki_model_resonant_intelligence_extension.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Yuno Resonant Conduct Principles</h3>
+                        <a href="Yuno/yuno_resonant_conduct_principles.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Yuno Response To Claude Inquiry</h3>
+                        <a href="Yuno/yuno_response_to_claude_inquiry.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Yuno Self Rumination Overview</h3>
+                        <a href="Yuno/yuno_self_rumination_overview.md">📄 閲覧する</a>
+                    </div>
+
+                </div>
+
+                <h3 class="subsection-title">レビュー・対話記録</h3>
+                <ul class="doc-list">
+
+                    <li><a href="Yuno/notion_integration_history.md">Notion Integration History</a></li>
+
+                    <li><a href="Yuno/review_yuno_implementation_roadmap_postgres.md">Review Yuno Implementation Roadmap Postgres</a></li>
+
+                    <li><a href="Yuno/yuno_claude_review_response.md">Yuno Claude Review Response</a></li>
+
+                </ul>
+
+            </section>
+
+            <!-- エラーリカバリー -->
+            <section class="section">
+                <h2 class="section-title">🔧 エラーリカバリー実装</h2>
+                <ul class="doc-list">
+
+                    <li><a href="error_recovery_basic_design.md">Error Recovery Basic Design</a> <span class="badge">設計</span></li>
+
+                    <li><a href="error_recovery_detailed_design.md">Error Recovery Detailed Design</a> <span class="badge">設計</span></li>
+
+                    <li><a href="error_recovery_implementation.md">Error Recovery Implementation</a> <span class="badge">実装</span></li>
+
+                    <li><a href="error_recovery_review_request.md">Error Recovery Review Request</a> <span class="badge">レビュー</span></li>
+
+                    <li><a href="error_recovery_review_response.md">Error Recovery Review Response</a> <span class="badge">レビュー</span></li>
+
+                    <li><a href="error_recovery_test_results.md">Error Recovery Test Results</a> <span class="badge">テスト</span></li>
+
+                </ul>
+            </section>
+
+            <!-- 統合・セットアップ -->
+            <section class="section">
+                <h2 class="section-title">🔗 統合・セットアップ</h2>
+                <div class="doc-grid">
+
+                    <div class="doc-card">
+                        <h3>Integration Design</h3>
+                        <p>システム統合設計</p>
+                        <a href="integration_design.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Integration Complete</h3>
+                        <p>統合完了報告</p>
+                        <a href="integration_complete.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Notion Setup Guide</h3>
+                        <p>Notion統合セットアップガイド</p>
+                        <a href="notion_setup_guide.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Notion Integration Summary</h3>
+                        <p>Notion統合サマリー</p>
+                        <a href="notion_integration_summary.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Quick Start Unified Stream</h3>
+                        <p>統一ストリームクイックスタート</p>
+                        <a href="quick_start_unified_stream.md">📄 閲覧する</a>
+                    </div>
+
+                    <div class="doc-card">
+                        <h3>Validation Checklist</h3>
+                        <p>検証チェックリスト</p>
+                        <a href="setup/validation_checklist.md">📄 閲覧する</a>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- 成果物・アウトプット -->
+            <section class="section">
+                <h2 class="section-title">📊 成果物・アウトプット</h2>
+                <ul class="doc-list">
+
+                    <li>Cloude Chat <a href="output/cloude_chat.md">(MD)</a></li>
+
+                    <li>Current Agent Memory Structure <a href="output/current_agent_memory_structure.md">(MD)</a></li>
+
+                    <li>Resonant Total Architecture Yuno Hiroaki Full 2025-11-07 <a href="output/resonant_total_architecture_yuno_hiroaki_full_2025-11-07.md">(MD)</a> <a href="output/resonant_total_architecture_yuno_hiroaki_full_2025-11-07.html">(HTML)</a></li>
+
+                    <li>Resonant Total Chronicle V5 Expanded <a href="output/resonant_total_chronicle_v5_expanded.md">(MD)</a></li>
+
+                    <li>Resonant Total Chronicle Yuno Hiroaki Full 2025-11-07 <a href="output/resonant_total_chronicle_yuno_hiroaki_full_2025-11-07.html">(HTML)</a> <a href="output/resonant_total_chronicle_yuno_hiroaki_full_2025-11-07.md">(MD)</a></li>
+
+                    <li>Resonant Total Chronicle Yuno Hiroaki Full Raw 2025-11-07 <a href="output/resonant_total_chronicle_yuno_hiroaki_full_raw_2025-11-07.md">(MD)</a> <a href="output/resonant_total_chronicle_yuno_hiroaki_full_raw_2025-11-07.html">(HTML)</a> <a href="output/resonant_total_chronicle_yuno_hiroaki_full_raw_2025-11-07.pdf">(PDF)</a></li>
+
+                </ul>
+            </section>
+
+            <!-- テンプレート・ユーティリティ -->
+            <section class="section">
+                <h2 class="section-title">🛠️ テンプレート・ユーティリティ</h2>
+                <ul class="doc-list">
+
+                    <li><a href="report_template.md">Report Template</a></li>
+
+                    <li><a href="env_template.txt">Env Template</a></li>
+
+                    <li><a href="create_resonant_total_archive.py">Create Resonant Total Archive</a></li>
+
+                    <li><a href="create_resonant_total_chronicle_v4_raw.py">Create Resonant Total Chronicle V4 Raw</a></li>
+
+                    <li><a href="create_resonant_total_chronicle_v5_expanded.py">Create Resonant Total Chronicle V5 Expanded</a></li>
+
+                </ul>
+            </section>
+
+            <!-- その他 -->
+            <section class="section">
+                <h2 class="section-title">📝 その他</h2>
+                <ul class="doc-list">
+
+                    <li><a href="html/github_webhook_receiver_spec.html">Github Webhook Receiver Spec</a></li>
+
+                    <li><a href="history/dir_restructure_commit.log">Dir Restructure Commit</a></li>
+
+                    <li><a href="persistence_check.log">Persistence Check</a></li>
+
+                    <li><a href="phase3_test.txt">Phase3 Test</a></li>
+
+                </ul>
+            </section>
+
+        </div>
+        
+        <footer>
+            <p>Resonant Engine - 自己反省型アーキテクチャシステム</p>
+            <p style="margin-top: 0.5rem; opacity: 0.8;">Yuno (GPT-5) × Kana (Claude) × Tsumu (Cursor)</p>
+        </footer>
+    </div>
+</body>
+</html>

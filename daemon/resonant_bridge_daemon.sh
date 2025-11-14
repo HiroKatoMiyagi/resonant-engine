@@ -5,7 +5,7 @@
 #           実際のI/O・同期・証跡生成を行う。
 # ==========================================
 
-ROOT="/Users/zero/Projects/kiro-v3.1"
+ROOT="/Users/zero/Projects/resonant-engine"
 LOG="$ROOT/logs/daemon_bridge.log"
 INTENT_FILE="$ROOT/bridge/intent_protocol.json"
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 set -euo pipefail
 
-ROOT="/Users/zero/Projects/kiro-v3.1"
+ROOT="/Users/zero/Projects/resonant-engine"
 INTENT_FILE="$ROOT/bridge/intent_protocol.json"
 LOG="$ROOT/logs/daemon_bridge.log"
 LAST_HASH=""

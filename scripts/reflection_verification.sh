@@ -1,5 +1,5 @@
 #!/bin/zsh
-LOG="/Users/zero/Projects/kiro-v3.1/logs/daemon_bridge.log"
+LOG="/Users/zero/Projects/resonant-engine/logs/daemon_bridge.log"
 TS=$(date '+%Y-%m-%d %H:%M:%S')
 
 echo "[$TS] 🪞 Reflection Phase initiated" >> "$LOG"

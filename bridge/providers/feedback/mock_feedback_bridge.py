@@ -10,7 +10,7 @@ from bridge.core.models.intent_model import IntentModel
 from bridge.core.models.reeval import ReEvaluationRequest
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard
-    from bridge.core.clients.reeval_client import ReEvalClient
+    from bridge.core.reeval_client import ReEvalClient
 
 
 class MockFeedbackBridge(FeedbackBridge):
@@ -21,7 +21,7 @@ class MockFeedbackBridge(FeedbackBridge):
         judgment: str = "approved",
         *,
         correction_diff: Optional[Dict[str, Any]] = None,
-    reeval_client: Optional["ReEvalClient"] = None,
+        reeval_client: Optional["ReEvalClient"] = None,
         correction_reason: str = "Mock feedback correction",
     ) -> None:
         super().__init__(reeval_client)
@@ -54,7 +54,10 @@ class MockFeedbackBridge(FeedbackBridge):
         self,
         intent: Dict[str, Any],
         feedback_history: List[Dict[str, Any]],
+        *,
+        evaluation: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
+        diff_payload = dict(self._correction_diff) if self._correction_diff else {"status": "corrected"}
         return {
             "intent": intent,
             "issues": [],
@@ -66,9 +69,17 @@ class MockFeedbackBridge(FeedbackBridge):
             ],
             "confidence": 0.9,
             "feedback_history_length": len(feedback_history),
+            "applied_via_reeval": self.reeval_client is not None and bool(diff_payload),
+            "diff": {"payload": diff_payload},
         }
 
-    async def execute(self, intent: IntentModel) -> IntentModel:
+    async def execute(
+        self,
+        intent: IntentModel,
+        *,
+        evaluation: Optional[Dict[str, Any]] = None,
+        correction_plan: Optional[Dict[str, Any]] = None,
+    ) -> IntentModel:
         """Trigger re-evaluation when the mock judgment requires changes."""
 
         if self.reeval_client is None:

@@ -378,7 +378,35 @@ Intent受信 → 正規化 → 処理 → フィードバック
 
 ---
 
-## 5. Related Documents
+## 5. Implementation Progress (2025-11-15)
+
+### 5.1 完了済みタスク
+- ✅ `bridge/core/reeval_client.py` を新設し、`MockDataBridge` / `MockAuditLogger` と連携するクライアント API を整備
+- ✅ `BridgeFactory` で ReEvalClient を自動生成し、Mock/Yuno いずれの FeedbackBridge にもアタッチ
+- ✅ `YunoFeedbackBridge` が Re-evaluation API を直接呼び出し、評価結果を `payload.feedback.yuno` に差分適用
+- ✅ `BridgeSet` の FEEDBACK ステージで生成した Correction Plan と ReEval 呼び出しを連携
+
+### 5.2 テストカバレッジ
+- `tests/bridge/test_sprint1_5_factory.py`（2件）: Factory の ReEvalClient 配線検証
+- `tests/bridge/test_sprint1_5_yuno_feedback_bridge.py`（2件）: Yuno 統合とエラーパス検証
+- `tests/bridge/test_sprint1_5_bridge_set.py`（1件）: Pipeline 全体での ReEval 動作確認
+- `tests/integration/test_sprint1_5_feedback_reeval_integration.py`（3件）: FastAPI ルータを介した HTTP 統合テスト
+- 合計 8 ケースを追加し、Sprint 1.5 要求 (≥8) を満たす
+
+### 5.3 実行手順
+```bash
+./venv/bin/python -m pytest \
+  tests/bridge/test_sprint1_5_factory.py \
+  tests/bridge/test_sprint1_5_yuno_feedback_bridge.py \
+  tests/bridge/test_sprint1_5_bridge_set.py \
+  tests/integration/test_sprint1_5_feedback_reeval_integration.py
+```
+
+### 5.4 ドキュメント更新方針
+- OpenAPI ドキュメントには `feedback.yuno.*` への差分適用フィールドと `metadata` ログ項目を追記予定
+- Sprint 2 と競合しないよう、日次同期チェックで ReEval API の再確認を継続
+
+## 6. Related Documents
 
 - Bridge Lite Sprint 1 Specification
 - Bridge Lite Sprint 2 Specification

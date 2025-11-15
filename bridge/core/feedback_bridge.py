@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard
-    from bridge.core.clients.reeval_client import ReEvalClient
+    from bridge.core.reeval_client import ReEvalClient
     from bridge.core.models.intent_model import IntentModel
 
 
@@ -44,10 +44,18 @@ class FeedbackBridge(ABC):
         self,
         intent: Dict[str, Any],
         feedback_history: List[Dict[str, Any]],
+        *,
+        evaluation: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """再評価結果をもとに Correction Plan を構築する。"""
+        """再評価結果と履歴をもとに Correction Plan を構築する。"""
 
-    async def execute(self, intent: "IntentModel") -> "IntentModel":
+    async def execute(
+        self,
+        intent: "IntentModel",
+        *,
+        evaluation: Optional[Dict[str, Any]] = None,
+        correction_plan: Optional[Dict[str, Any]] = None,
+    ) -> "IntentModel":
         """Optional hook for bridges that can trigger re-evaluation directly."""
 
         return intent

@@ -9,7 +9,11 @@ from typing import Any, Dict, List, Optional
 
 from openai import AsyncOpenAI
 
+from bridge.core.constants import PhilosophicalActor
 from bridge.core.feedback_bridge import FeedbackBridge
+from bridge.core.models.intent_model import IntentModel
+from bridge.core.models.reeval import ReEvaluationRequest
+from bridge.core.reeval_client import ReEvalClient
 
 
 class YunoFeedbackBridge(FeedbackBridge):
@@ -24,7 +28,10 @@ class YunoFeedbackBridge(FeedbackBridge):
         api_key: Optional[str] = None,
         model: str = "gpt-5-preview",
         client: Optional[AsyncOpenAI] = None,
+        *,
+        reeval_client: Optional[ReEvalClient] = None,
     ) -> None:
+        super().__init__(reeval_client)
         key = api_key or os.getenv("OPENAI_API_KEY")
         if not key and client is None:
             raise ValueError("OPENAI_API_KEY must be configured for YunoFeedbackBridge")
@@ -55,9 +62,63 @@ class YunoFeedbackBridge(FeedbackBridge):
         self,
         intent: Dict[str, Any],
         feedback_history: List[Dict[str, Any]],
+        *,
+        evaluation: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        evaluation = await self.reanalyze(intent, feedback_history)
-        return self._build_correction(intent, evaluation)
+        evaluation_result = evaluation or await self.reanalyze(intent, feedback_history)
+        return self._build_correction(intent, evaluation_result, feedback_history)
+
+    async def execute(
+        self,
+        intent: IntentModel,
+        *,
+        evaluation: Optional[Dict[str, Any]] = None,
+        correction_plan: Optional[Dict[str, Any]] = None,
+    ) -> IntentModel:
+        if self.reeval_client is None:
+            return intent
+
+        evaluation_result = evaluation
+        plan = correction_plan
+
+        if plan is None or evaluation_result is None:
+            payload_view = intent.model_dump_bridge()
+            evaluation_result = evaluation_result or await self.reanalyze(
+                payload_view,
+                intent.correction_history,
+            )
+            if evaluation_result.get("status") == "error":
+                return intent
+            plan = await self.generate_correction(
+                payload_view,
+                intent.correction_history,
+                evaluation=evaluation_result,
+            )
+
+        if not plan or evaluation_result is None or evaluation_result.get("status") == "error":
+            return intent
+
+        diff = plan.get("diff")
+        if not isinstance(diff, dict) or not diff.get("payload"):
+            return intent
+
+        metadata = {
+            "provider": "yuno",
+            "evaluation": evaluation_result,
+            "recommended_changes": plan.get("recommended_changes"),
+            "generated_at": plan.get("generated_at"),
+        }
+
+        request = ReEvaluationRequest(
+            intent_id=intent.id,
+            diff=diff,
+            source=PhilosophicalActor.YUNO,
+            reason=plan.get("reason", "Yuno feedback correction"),
+            metadata=metadata,
+        )
+
+        await self.reeval_client.reeval(request)
+        return await self.reeval_client.get_intent(intent.intent_id)
 
     async def _invoke(self, prompt: str) -> Dict[str, Any]:
         try:
@@ -144,13 +205,14 @@ class YunoFeedbackBridge(FeedbackBridge):
                 "reason": "invalid-json",
                 "raw": content,
             }
+        status = data.get("status", "ok")
         criteria = data.get("criteria") or {}
         suggestions = data.get("suggestions") or []
         issues = data.get("issues") or []
         root_causes = data.get("root_causes") or []
         alternatives = data.get("alternatives") or []
         return {
-            "status": "ok",
+            "status": status,
             "judgment": data.get("judgment", "approved_with_notes"),
             "evaluation_score": float(data.get("evaluation_score", 0.75)),
             "criteria": criteria,
@@ -162,12 +224,16 @@ class YunoFeedbackBridge(FeedbackBridge):
             "raw": data,
         }
 
-    @staticmethod
-    def _build_correction(intent: Dict[str, Any], evaluation: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_correction(
+        self,
+        intent: Dict[str, Any],
+        evaluation: Dict[str, Any],
+        feedback_history: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
         suggestions = evaluation.get("suggestions") or []
         recommended_changes = [
             {
-                "description": suggestion,
+                "description": suggestion if isinstance(suggestion, str) else json.dumps(suggestion, ensure_ascii=False),
                 "priority": "medium",
             }
             for suggestion in suggestions
@@ -177,12 +243,43 @@ class YunoFeedbackBridge(FeedbackBridge):
                 "priority": "low",
             }
         ]
-        return {
-            "intent_id": intent.get("id"),
+
+        confidence = float(evaluation.get("evaluation_score", 0.5))
+        reason = evaluation.get("reason") or "Yuno feedback correction"
+        generated_at = datetime.now(timezone.utc).isoformat()
+
+        feedback_entry = {
+            "status": evaluation.get("status", "ok"),
+            "judgment": evaluation.get("judgment"),
+            "reason": evaluation.get("reason"),
+            "evaluation_score": confidence,
+            "criteria": evaluation.get("criteria"),
             "issues": evaluation.get("issues", []),
             "root_causes": evaluation.get("root_causes", []),
             "alternatives": evaluation.get("alternatives", []),
+            "history_count": len(feedback_history),
+            "generated_at": generated_at,
+        }
+
+        diff = {
+            "payload": {
+                "feedback.yuno.latest": feedback_entry,
+                "feedback.yuno.recommended_changes": recommended_changes,
+                "feedback.yuno.reason": reason,
+                "feedback.yuno.confidence": confidence,
+            }
+        }
+
+        return {
+            "intent_id": intent.get("id"),
+            "issues": feedback_entry["issues"],
+            "root_causes": feedback_entry["root_causes"],
+            "alternatives": feedback_entry["alternatives"],
             "recommended_changes": recommended_changes,
-            "confidence": evaluation.get("evaluation_score", 0.5),
+            "confidence": confidence,
             "evaluation": evaluation,
+            "reason": reason,
+            "diff": diff,
+            "applied_via_reeval": self.reeval_client is not None,
+            "generated_at": generated_at,
         }

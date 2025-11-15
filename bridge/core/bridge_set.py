@@ -132,14 +132,13 @@ class BridgeSet:
                 intent.model_dump_bridge(),
                 intent.correction_history,
             )
+            feedback_entry = {
+                "stage": "feedback",
+                "result": feedback_result,
+                "recorded_at": _utcnow().isoformat(),
+            }
             corrections = list(intent.correction_history)
-            corrections.append(
-                {
-                    "stage": "feedback",
-                    "result": feedback_result,
-                    "recorded_at": _utcnow().isoformat(),
-                }
-            )
+            corrections.append(feedback_entry)
             status = intent.status
             updated_intent = intent.with_updates(
                 correction_history=corrections,
@@ -149,6 +148,7 @@ class BridgeSet:
                 correction_plan = await self.feedback.generate_correction(
                     updated_intent.model_dump_bridge(),
                     [feedback_result],
+                    evaluation=feedback_result,
                 )
                 correction_entry = {
                     "stage": "correction",
@@ -156,12 +156,27 @@ class BridgeSet:
                     "generated_at": _utcnow().isoformat(),
                 }
                 corrections.append(correction_entry)
+                updated_intent = updated_intent.with_updates(
+                    correction_history=corrections,
+                    updated_at=_utcnow(),
+                )
+                updated_intent = await self.feedback.execute(
+                    updated_intent,
+                    evaluation=feedback_result,
+                    correction_plan=correction_plan,
+                )
+                latest_record = updated_intent.correction_history[-1] if updated_intent.correction_history else None
                 persist_payload = {
                     "status": IntentStatusEnum.CORRECTED.value,
                     "correction_plan": correction_plan,
                     "feedback": feedback_result,
                     "generated_at": correction_entry["generated_at"],
+                    "diff": correction_plan.get("diff"),
                 }
+                if latest_record is not None:
+                    persist_payload.setdefault("correction_id", latest_record.correction_id)
+                    persist_payload.setdefault("applied_at", latest_record.applied_at)
+                    persist_payload.setdefault("source", latest_record.source.value)
                 updated_intent = await self.data.save_correction(updated_intent.intent_id, persist_payload)
                 status = IntentStatusEnum.CORRECTED
                 updated_intent = updated_intent.with_updates(updated_at=_utcnow())

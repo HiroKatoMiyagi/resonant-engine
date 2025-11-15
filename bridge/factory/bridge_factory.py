@@ -10,6 +10,7 @@ from bridge.core.audit_logger import AuditLogger
 from bridge.core.bridge_set import BridgeSet
 from bridge.core.data_bridge import DataBridge
 from bridge.core.feedback_bridge import FeedbackBridge
+from bridge.core.reeval_client import ReEvalClient
 from bridge.providers.ai import KanaAIBridge, MockAIBridge
 from bridge.providers.audit import MockAuditLogger, PostgresAuditLogger
 from bridge.providers.data import MockDataBridge, PostgresDataBridge
@@ -44,12 +45,14 @@ class BridgeFactory:
     @staticmethod
     def create_feedback_bridge(
         bridge_type: Optional[str] = None,
+        *,
+        reeval_client: Optional[ReEvalClient] = None,
     ) -> FeedbackBridge:
         bridge_key = (bridge_type or os.getenv("FEEDBACK_BRIDGE_TYPE", "mock")).lower()
         if bridge_key == "yuno":
-            return YunoFeedbackBridge()
+            return YunoFeedbackBridge(reeval_client=reeval_client)
         if bridge_key == "mock":
-            return MockFeedbackBridge()
+            return MockFeedbackBridge(reeval_client=reeval_client)
         raise ValueError(f"Unsupported FEEDBACK_BRIDGE_TYPE: {bridge_key}")
 
     @staticmethod
@@ -73,8 +76,13 @@ class BridgeFactory:
 
         data = BridgeFactory.create_data_bridge(data_bridge)
         ai = BridgeFactory.create_ai_bridge(ai_bridge)
-        feedback = BridgeFactory.create_feedback_bridge(feedback_bridge)
         audit = BridgeFactory.create_audit_logger(audit_logger)
+        reeval_client = ReEvalClient(data, audit)
+        feedback = BridgeFactory.create_feedback_bridge(
+            feedback_bridge,
+            reeval_client=reeval_client,
+        )
+        feedback.attach_reeval_client(reeval_client)
         return BridgeSet(data=data, ai=ai, feedback=feedback, audit=audit)
 
     @staticmethod

@@ -43,13 +43,56 @@ async def get_audit_logger() -> AuditLogger:
     return logger
 
 
-@router.post("/reeval", response_model=ReEvaluationResponse)
+@router.post(
+    "/reeval",
+    response_model=ReEvaluationResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["re-evaluation"],
+    summary="Re-evaluate and correct an Intent",
+    description="""
+    Apply differential corrections to an Intent based on feedback from Yuno or Kana.
+
+    This endpoint is typically called automatically by FeedbackBridge implementations
+    (YunoFeedbackBridge, MockFeedbackBridge) when corrections are needed.
+
+    **Idempotency**: Same (intent_id + diff) combination will return `already_applied: true`
+    on subsequent calls without modifying the Intent.
+
+    **Authorization**: Only YUNO and KANA sources are permitted. TSUMU is rejected.
+
+    **Diff Format**:
+    - Use absolute values only (no relative operators like "+5")
+    - Nested fields use dot notation (e.g., "payload.feedback.yuno.reason")
+    - See Sprint 1 specification for full diff rules
+    """,
+    responses={
+        200: {
+            "description": "Intent successfully re-evaluated",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "intent_id": "550e8400-e29b-41d4-a716-446655440000",
+                        "status": "corrected",
+                        "already_applied": False,
+                        "correction_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+                        "applied_at": "2025-11-15T12:34:56.789Z",
+                        "correction_count": 1,
+                    }
+                }
+            },
+        },
+        400: {"description": "Invalid diff format or validation error"},
+        403: {"description": "Source not authorized for re-evaluation"},
+        404: {"description": "Intent not found"},
+        409: {"description": "Intent in non-correctable status"},
+    },
+)
 async def reeval_intent(
     request: ReEvaluationRequest,
     data_bridge: DataBridge = Depends(get_data_bridge),
     audit_logger: AuditLogger = Depends(get_audit_logger),
 ) -> ReEvaluationResponse:
-    """Apply a differential correction to an intent, ensuring idempotency."""
+    """Apply a differential correction to an intent using FeedbackBridge-generated diffs."""
 
     intent_id_str = str(request.intent_id)
 

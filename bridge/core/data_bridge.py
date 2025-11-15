@@ -1,38 +1,27 @@
-"""Abstract data access bridge for Bridge Lite."""
+"""Bridge Lite data-access abstraction matching v2.0 specification."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
+
+from bridge.core.enums import IntentStatus
+from bridge.core.models.intent_model import IntentModel
 
 
 class DataBridge(ABC):
-    """抽象データアクセスレイヤー。
-
-    Intent/Messageストレージに対する操作を統一インターフェースで提供する。
-    具体的な実装（PostgreSQL、Mockなど）はこの抽象クラスを継承する。
-    """
+    """Intentと再評価情報を扱うストレージ層の抽象クラス。"""
 
     def __init__(self) -> None:
-        self._connected: bool = False
-
-    @property
-    def is_connected(self) -> bool:
-        """現在の接続状態を返す。"""
-
-        return self._connected
+        self._connected = False
 
     async def connect(self) -> None:
-        """接続を初期化する。
-
-        具体実装側で接続処理（プールの初期化など）を行う。
-        デフォルトでは状態フラグのみを更新する。
-        """
+        """必要なら接続を初期化する。"""
 
         self._connected = True
 
     async def disconnect(self) -> None:
-        """接続を終了する。"""
+        """接続を解放する。"""
 
         self._connected = False
 
@@ -43,91 +32,33 @@ class DataBridge(ABC):
     async def __aexit__(self, exc_type, exc, tb) -> None:  # type: ignore[override]
         await self.disconnect()
 
-    # ---- Intent CRUD -------------------------------------------------
+    # ---- Required API (v2.0 spec) ----------------------------------
 
     @abstractmethod
-    async def save_intent(
-        self,
-        intent_type: str,
-        data: Dict[str, Any],
-        status: str = "pending",
-        source: str = "auto_generated",
-        user_id: Optional[str] = None,
-    ) -> str:
-        """Intentを保存しIDを返す。"""
+    async def save_intent(self, intent: IntentModel) -> IntentModel:
+        """Intent を保存し、永続化されたモデルを返す。"""
 
     @abstractmethod
-    async def get_intent(self, intent_id: str) -> Optional[Dict[str, Any]]:
-        """IntentをIDで取得する。"""
+    async def get_intent(self, intent_id: str) -> IntentModel:
+        """intent_id に対応する Intent モデルを取得する。"""
 
     @abstractmethod
-    async def get_pending_intents(
-        self,
-        limit: int = 10,
-        offset: int = 0,
-    ) -> List[Dict[str, Any]]:
-        """処理待ちIntentの一覧を取得する。"""
+    async def save_correction(self, intent_id: str, correction: Dict[str, Any]) -> IntentModel:
+        """再評価から生成された Correction Plan を保存し、Intent を更新して返す。"""
 
     @abstractmethod
+    async def list_intents(self, status: Optional[IntentStatus] = None) -> List[IntentModel]:
+        """Intent を状態などでフィルタして列挙する。"""
+
+    @abstractmethod
+    async def update_intent(self, intent: IntentModel) -> IntentModel:
+        """Persist updates to an existing intent."""
+
     async def update_intent_status(
         self,
         intent_id: str,
-        status: str,
-        result: Optional[Dict[str, Any]] = None,
-    ) -> bool:
-        """Intentのステータスを更新する。"""
+        status: Union[IntentStatus, str],
+    ) -> IntentModel:
+        """Optionally update an intent status. Bridges should override when supported."""
 
-    # ---- Feedback / Reevaluation ------------------------------------
-
-    @abstractmethod
-    async def save_feedback(
-        self,
-        intent_id: str,
-        feedback_data: Dict[str, Any],
-    ) -> bool:
-        """Kana処理後のフィードバックを保存する。"""
-
-    @abstractmethod
-    async def get_pending_reevaluations(
-        self,
-        limit: int = 10,
-    ) -> List[Dict[str, Any]]:
-        """再評価待ちIntentを取得する。"""
-
-    @abstractmethod
-    async def save_reevaluation(
-        self,
-        intent_id: str,
-        reevaluation_data: Dict[str, Any],
-    ) -> bool:
-        """Yuno再評価データを保存する。"""
-
-    @abstractmethod
-    async def update_reevaluation_status(
-        self,
-        intent_id: str,
-        status: str,
-        judgment: str,
-        reason: str,
-    ) -> bool:
-        """再評価後の最終ステータスを更新する。"""
-
-    # ---- Message operations -----------------------------------------
-
-    @abstractmethod
-    async def save_message(
-        self,
-        content: str,
-        sender: str,
-        intent_id: Optional[str] = None,
-        thread_id: Optional[str] = None,
-    ) -> str:
-        """メッセージを保存しIDを返す。"""
-
-    @abstractmethod
-    async def get_messages(
-        self,
-        limit: int = 50,
-        thread_id: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        """メッセージ一覧を取得する。"""
+        raise NotImplementedError("update_intent_status is not implemented for this data bridge")

@@ -1,19 +1,17 @@
-"""Bridge Lite provider implementations."""
+"""Bridge Lite provider implementations organized by concern."""
 
-from .postgresql_bridge import PostgreSQLBridge
-from .claude_bridge import ClaudeBridge
-from .yuno_feedback_bridge import YunoFeedbackBridge
-from .mock_bridge import (
-    MockDataBridge,
-    MockAIBridge,
-    MockFeedbackBridge,
-)
+from .data import MockDataBridge, PostgresDataBridge
+from .ai import KanaAIBridge, MockAIBridge
+from .feedback import MockFeedbackBridge, YunoFeedbackBridge
+from .audit import MockAuditLogger, PostgresAuditLogger
 
 __all__ = [
-    "PostgreSQLBridge",
-    "ClaudeBridge",
-    "YunoFeedbackBridge",
+    "PostgresDataBridge",
     "MockDataBridge",
+    "KanaAIBridge",
     "MockAIBridge",
+    "YunoFeedbackBridge",
     "MockFeedbackBridge",
+    "PostgresAuditLogger",
+    "MockAuditLogger",
 ]

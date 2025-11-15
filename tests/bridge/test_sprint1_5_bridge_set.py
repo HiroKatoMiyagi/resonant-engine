@@ -1,0 +1,43 @@
+import pytest
+
+from bridge.core.constants import IntentStatusEnum, TechnicalActor
+from bridge.core.models.intent_model import IntentModel
+from bridge.core.reeval_client import ReEvalClient
+from bridge.core.bridge_set import BridgeSet
+from bridge.providers.ai import MockAIBridge
+from bridge.providers.audit import MockAuditLogger
+from bridge.providers.data import MockDataBridge
+from bridge.providers.feedback import MockFeedbackBridge
+
+
+@pytest.mark.asyncio
+async def test_sprint1_5_bridge_set_feedback_triggers_reeval() -> None:
+    data_bridge = MockDataBridge()
+    await data_bridge.connect()
+    audit_logger = MockAuditLogger()
+
+    bridge_set = BridgeSet(
+        data=data_bridge,
+        ai=MockAIBridge(),
+        feedback=MockFeedbackBridge(
+            judgment="requires_changes",
+            correction_diff={"status": "corrected"},
+            reeval_client=ReEvalClient(data_bridge, audit_logger),
+        ),
+        audit=audit_logger,
+    )
+
+    intent = IntentModel.new(
+        intent_type="demo",
+        payload={"status": "received"},
+        technical_actor=TechnicalActor.DAEMON,
+    )
+
+    result = await bridge_set.execute(intent)
+
+    stored = await data_bridge.get_intent(result.intent_id)
+    # Feedback stage should have applied correction before output completion
+    assert stored.payload["status"] == "corrected"
+    assert stored.status == IntentStatusEnum.COMPLETED
+    assert stored.correction_history, "Expected correction history to be populated"
+    assert stored.correction_history[-1].diff["payload"]["status"] == "corrected"

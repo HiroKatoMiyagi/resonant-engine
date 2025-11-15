@@ -1,114 +1,59 @@
-import asyncio
-from typing import Dict
-
 import pytest
 
-from bridge.providers.mock_bridge import MockAIBridge, MockDataBridge, MockFeedbackBridge
+from bridge.core.constants import IntentStatusEnum, TechnicalActor
+from bridge.core.models.intent_model import IntentModel
+from bridge.providers.data import MockDataBridge
+from bridge.providers.feedback import MockFeedbackBridge
 
 
 @pytest.mark.asyncio
-async def test_mock_data_bridge_intent_flow() -> None:
+async def test_mock_data_bridge_round_trip() -> None:
     data_bridge = MockDataBridge()
     await data_bridge.connect()
 
-    intent_id = await data_bridge.save_intent(
+    payload = {"details": {"target": "test.py"}}
+    intent = IntentModel.new(
         intent_type="review",
-        data={"target": "test.py"},
+        payload=payload,
+        technical_actor=TechnicalActor.DAEMON,
     )
-    intent = await data_bridge.get_intent(intent_id)
-    assert intent is not None
-    assert intent["status"] == "pending"
+    persisted = await data_bridge.save_intent(intent)
+    fetched = await data_bridge.get_intent(persisted.intent_id)
+    assert fetched.payload["details"]["target"] == "test.py"
 
-    await data_bridge.update_intent_status(intent_id, status="processing")
-    intent = await data_bridge.get_intent(intent_id)
-    assert intent is not None
-    assert intent["status"] == "processing"
-
-    feedback_payload: Dict[str, object] = {
-        "kana_response": "レビュー完了",
-        "processing_time_ms": 1200,
+    correction = {
+    "status": IntentStatusEnum.CORRECTED.value,
+        "issues": ["Missing regression tests"],
+        "recommended_changes": [
+            {
+                "description": "Add regression tests for bug fix",
+                "priority": "high",
+            }
+        ],
     }
-    await data_bridge.save_feedback(intent_id, feedback_payload)
+    updated = await data_bridge.save_correction(persisted.intent_id, correction)
 
-    intent = await data_bridge.get_intent(intent_id)
-    assert intent is not None
-    assert intent["status"] == "waiting_reevaluation"
-    assert intent["feedback"] == feedback_payload
+    assert updated.status == IntentStatusEnum.CORRECTED
+    assert updated.corrections[0]["issues"][0] == "Missing regression tests"
 
-    pending = await data_bridge.get_pending_reevaluations(limit=5)
-    assert any(item["id"] == intent_id for item in pending)
+    all_intents = await data_bridge.list_intents()
+    assert any(item.intent_id == persisted.intent_id for item in all_intents)
 
-    reevaluation_payload: Dict[str, object] = {
-        "yuno_judgment": "approved",
-        "reason": "OK",
-    }
-    await data_bridge.save_reevaluation(intent_id, reevaluation_payload)
-
-    await data_bridge.update_reevaluation_status(
-        intent_id,
-        status="approved",
-        judgment="approved",
-        reason="OK",
-    )
-
-    intent = await data_bridge.get_intent(intent_id)
-    assert intent is not None
-    assert intent["status"] == "approved"
-    assert intent["reevaluation"]["yuno_judgment"] == "approved"
-
-    message_id = await data_bridge.save_message("hello", sender="user", intent_id=intent_id)
-    assert message_id
-
-    messages = await data_bridge.get_messages()
-    assert len(messages) == 1
-    assert messages[0]["intent_id"] == intent_id
+    corrected_only = await data_bridge.list_intents(status=IntentStatusEnum.CORRECTED)
+    assert corrected_only[0].intent_id == persisted.intent_id
 
     await data_bridge.disconnect()
 
 
 @pytest.mark.asyncio
-async def test_mock_bridges_compose() -> None:
-    data_bridge = MockDataBridge()
-    ai_bridge = MockAIBridge(static_response="Result")
-    feedback_bridge = MockFeedbackBridge()
+async def test_mock_feedback_bridge_generate_correction() -> None:
+    feedback_bridge = MockFeedbackBridge(judgment="approved_with_notes")
+    intent = {"id": "intent-1", "type": "review"}
 
-    await data_bridge.connect()
-    intent_type = "review"
-    intent_id = await data_bridge.save_intent(intent_type, data={"target": "app.py"})
-    prompt = f"Process intent {intent_type}"
-    ai_response = await ai_bridge.call_ai(prompt)
-    assert ai_response is not None
+    reevaluation = await feedback_bridge.request_reevaluation(intent)
+    assert reevaluation["judgment"] == "approved_with_notes"
 
-    feedback = {
-        "kana_response": ai_response,
-        "processing_time_ms": 1000,
-    }
-    await data_bridge.save_feedback(intent_id, feedback)
-
-    intent_snapshot = await data_bridge.get_intent(intent_id)
-    assert intent_snapshot is not None
-    reevaluation = await feedback_bridge.request_reevaluation(
-        intent_id,
-        intent_snapshot,
-        feedback,
-    )
-    assert reevaluation is not None
-    await data_bridge.save_reevaluation(intent_id, reevaluation)
-
-    final_status = (
-        "approved"
-        if reevaluation["yuno_judgment"] in {"approved", "approved_with_notes"}
-        else "rejected"
-    )
-
-    await data_bridge.update_reevaluation_status(
-        intent_id,
-        final_status,
-        reevaluation["yuno_judgment"],
-        reevaluation["reason"],
-    )
-
-    final = await data_bridge.get_intent(intent_id)
-    assert final is not None
-    assert final["status"] == final_status
-    await data_bridge.disconnect()
+    history = [{"feedback": "Looks good"}]
+    correction = await feedback_bridge.generate_correction(intent, history)
+    assert correction["recommended_changes"][0]["priority"] == "low"
+    assert correction["feedback_history_length"] == 1

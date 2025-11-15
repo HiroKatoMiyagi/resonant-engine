@@ -1,25 +1,14 @@
-"""Abstract AI bridge for Bridge Lite."""
+"""Abstract AI bridge aligned with Bridge Lite spec v2.0."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 class AIBridge(ABC):
-    """AI API呼び出しを抽象化するBridge。"""
+    """Kana などの AI プロバイダ呼び出しを抽象化する。"""
 
     @abstractmethod
-    async def call_ai(
-        self,
-        prompt: str,
-        model: Optional[str] = None,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        **kwargs: Any,
-    ) -> Optional[str]:
-        """AI APIを呼び出して応答テキストを返す。"""
-
-    @abstractmethod
-    async def get_model_info(self) -> Dict[str, Any]:
-        """現在使用中のモデル情報を返す。"""
+    async def process_intent(self, intent: Dict[str, Any]) -> Dict[str, Any]:
+        """Intent を受け取り、AI による一次解析結果を返す。"""

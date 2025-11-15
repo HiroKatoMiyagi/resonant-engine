@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bridge.providers.yuno_feedback_bridge import YunoFeedbackBridge
+from bridge.providers.feedback.yuno_feedback_bridge import YunoFeedbackBridge
 
 
 class FakeChatCompletions:
@@ -42,22 +42,23 @@ async def test_yuno_feedback_bridge_parses_response() -> None:
     }
     bridge = YunoFeedbackBridge(client=FakeClient(payload))
 
-    intent_data = {
+    intent = {
+        "id": "intent-123",
         "type": "review",
-        "data": {"target": "module.py"},
-    }
-    feedback_data = {
-        "kana_response": "Performed code review",
-        "processing_time_ms": 2345,
+        "payload": {"target": "module.py"},
     }
 
-    result = await bridge.request_reevaluation("intent-123", intent_data, feedback_data)
-    assert result is not None
-    assert result["yuno_judgment"] == "approved"
+    result = await bridge.request_reevaluation(intent)
+    assert result["status"] == "ok"
+    assert result["judgment"] == "approved"
     assert result["evaluation_score"] == pytest.approx(0.93)
-    assert result["evaluation_criteria"]["code_quality"] == pytest.approx(0.9)
+    assert result["criteria"]["code_quality"] == pytest.approx(0.9)
     assert result["reason"] == "Intent meets expectations."
     assert "reevaluated_at" in result
+
+    correction = await bridge.generate_correction(intent, feedback_history=[{"note": "fine"}])
+    assert correction["recommended_changes"][0]["priority"] == "medium"
+    assert correction["confidence"] == pytest.approx(0.93)
 
 
 @pytest.mark.asyncio
@@ -73,9 +74,6 @@ async def test_yuno_feedback_bridge_handles_invalid_json() -> None:
 
     bridge = YunoFeedbackBridge(client=BadClient())
 
-    result = await bridge.request_reevaluation(
-        "intent",
-        {"type": "review", "data": {}},
-        {"kana_response": "ok"},
-    )
-    assert result is None
+    intent = {"id": "intent", "type": "review", "payload": {}}
+    result = await bridge.request_reevaluation(intent)
+    assert result["status"] == "error"

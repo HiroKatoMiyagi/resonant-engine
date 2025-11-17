@@ -229,7 +229,20 @@ resonant-engine/
    gh workflow run nightly-performance.yml
    ```
 
-2. **ローカルテスト**:
+2. **Slack Webhook設定**:
+   ```bash
+   # GitHub Secretsに追加
+   gh secret set SLACK_WEBHOOK_URL --body "https://hooks.slack.com/services/..."
+   
+   # 確認
+   gh secret list
+   ```
+   
+   **注**: Slack通知は既にワークフローに実装済み
+   - テスト失敗時の通知
+   - リグレッション検出時の通知
+
+3. **ローカルテスト**:
    ```bash
    # メトリクス抽出のテスト
    python scripts/extract_performance_metrics.py \
@@ -243,7 +256,7 @@ resonant-engine/
      performance-metrics.json
    ```
 
-3. **CI Infrastructure Tests実行**:
+4. **CI Infrastructure Tests実行**:
    ```bash
    pytest tests/ci/test_nightly_workflow.py -v
    # 期待: 13テストPASS

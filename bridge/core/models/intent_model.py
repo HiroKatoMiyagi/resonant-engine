@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
+from typing import Any, ClassVar, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -98,6 +98,32 @@ class IntentModel(BaseModel):
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
     version: int = Field(default=0)
+    _ALLOWED_STATUS_TRANSITIONS: ClassVar[Dict[IntentStatusEnum, set[IntentStatusEnum]]] = {
+        IntentStatusEnum.RECEIVED: {
+            IntentStatusEnum.RECEIVED,
+            IntentStatusEnum.NORMALIZED,
+            IntentStatusEnum.FAILED,
+        },
+        IntentStatusEnum.NORMALIZED: {
+            IntentStatusEnum.NORMALIZED,
+            IntentStatusEnum.PROCESSED,
+            IntentStatusEnum.COMPLETED,
+            IntentStatusEnum.FAILED,
+        },
+        IntentStatusEnum.PROCESSED: {
+            IntentStatusEnum.PROCESSED,
+            IntentStatusEnum.CORRECTED,
+            IntentStatusEnum.COMPLETED,
+            IntentStatusEnum.FAILED,
+        },
+        IntentStatusEnum.CORRECTED: {
+            IntentStatusEnum.CORRECTED,
+            IntentStatusEnum.COMPLETED,
+            IntentStatusEnum.FAILED,
+        },
+        IntentStatusEnum.COMPLETED: {IntentStatusEnum.COMPLETED},
+        IntentStatusEnum.FAILED: {IntentStatusEnum.FAILED},
+    }
 
     @field_validator("correction_history", mode="before")
     def _coerce_corrections(cls, value: Any) -> List[CorrectionRecord]:
@@ -139,6 +165,26 @@ class IntentModel(BaseModel):
         """Return a deep copy of the model with selected attributes updated."""
 
         return self.model_copy(update=changes, deep=True)
+
+    def increment_version(self) -> "IntentModel":
+        """Increment version metadata in-place and update timestamp."""
+
+        self.version += 1
+        self.updated_at = _now()
+        return self
+
+    @staticmethod
+    def validate_status_transition(current: IntentStatusEnum, new: IntentStatusEnum) -> None:
+        """Ensure status transitions respect the allowed lifecycle graph."""
+
+        if current == new:
+            return
+        allowed = IntentModel._ALLOWED_STATUS_TRANSITIONS.get(current, set())
+        if new not in allowed:
+            raise InvalidStatusError(
+                f"Invalid status transition {current.value} -> {new.value}",
+                context={"current": current.value, "requested": new.value},
+            )
 
     def apply_correction(
         self,

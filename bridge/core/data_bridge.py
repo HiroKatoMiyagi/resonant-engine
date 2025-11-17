@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
 from bridge.core.enums import IntentStatus
 from bridge.core.models.intent_model import IntentModel
+from bridge.core.locks import LockedIntentSession
 
 
 class DataBridge(ABC):
@@ -62,3 +63,22 @@ class DataBridge(ABC):
         """Optionally update an intent status. Bridges should override when supported."""
 
         raise NotImplementedError("update_intent_status is not implemented for this data bridge")
+
+    @abstractmethod
+    async def update_intent_if_version_matches(
+        self,
+        intent_id: str,
+        intent: IntentModel,
+        *,
+        expected_version: int,
+    ) -> bool:
+        """Attempt to persist changes only when the intent version matches the expectation."""
+
+    @abstractmethod
+    def lock_intent_for_update(
+        self,
+        intent_id: str,
+        *,
+        timeout: float = 5.0,
+    ) -> AsyncIterator["LockedIntentSession"]:
+        """Acquire a pessimistic lock for exclusive operations."""

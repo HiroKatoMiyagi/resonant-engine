@@ -8,6 +8,14 @@
 **目的**: 本番運用レベルの並行実行制御とテストカバレッジの確保
 
 ---
+## CRITICAL: Database Schema
+
+**Existing Schema**: `intents` table uses `data` JSONB column (NOT `payload`)
+
+**Implementation Note**: 
+- All code examples in this spec may reference generic column names
+- Actual implementation MUST use existing `data` column
+- DO NOT modify existing schema
 
 ## 0. Parallel Execution Strategy
 
@@ -167,6 +175,73 @@ tests/performance/test_sprint2_concurrency_performance.py
 - Sprint 1.5のブランチを直接編集すること
 - テストファイル名の重複
 - `main` ブランチへの直接マージ（レビュー前）
+### 0.9 CRITICAL: Database Schema Protection
+
+**⚠️ IMPORTANT: 既存データベーススキーマの保護**
+
+この仕様書の実装を開始する前に、以下を必ず確認してください。
+
+#### 既存スキーマ
+
+```sql
+-- intentsテーブル（既存・稼働中）
+CREATE TABLE intents (
+    id UUID PRIMARY KEY,
+    data JSONB,          -- ← 必ずこのカラムを使用すること
+    status VARCHAR(50),
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    version INTEGER DEFAULT 1,
+    ...
+);
+```
+
+#### 絶対禁止事項
+
+- ❌ `DROP TABLE` の使用
+- ❌ `DROP TABLE IF EXISTS` の使用
+- ❌ 既存テーブルの削除・変更
+- ❌ `data`カラムの名前変更（`payload`への変更など）
+- ❌ 既存`schema.sql`への破壊的変更
+
+#### 実装ルール
+
+1. **カラム名**: PostgresDataBridgeでは必ず`data`カラムを使用（`payload`ではない）
+2. **サンプルコードの注意**: この仕様書内のサンプルコードで`payload`と記載されている箇所があっても、実装では必ず`data`を使用
+3. **スキーマ変更**: 新規カラム追加が必要な場合は実装を停止して事前報告
+
+#### 許可される操作
+
+- ✅ 既存の`data`カラムを使用
+- ✅ 新しいカラムの追加（`ALTER TABLE ADD COLUMN`）
+- ✅ インデックスの追加
+- ✅ 新しいテーブルの作成（既存と競合しない場合）
+
+#### 実装例
+
+```python
+# ✅ 正しい実装（dataカラムを使用）
+await conn.execute("""
+    INSERT INTO intents (id, data, status, version, created_at)
+    VALUES ($1, $2, $3, $4, $5)
+""", intent_id, json.dumps(intent_data), status, 1, now)
+
+# ❌ 間違った実装（payloadカラムは存在しない）
+await conn.execute("""
+    INSERT INTO intents (id, payload, status, version, created_at)
+    VALUES ($1, $2, $3, $4, $5)
+""", intent_id, json.dumps(intent_data), status, 1, now)
+```
+
+#### なぜこれが重要か
+
+これは単なるルールではなく、Resonant Engineの哲学的原則「時間軸を尊重」の実践です：
+
+- 既存スキーマには「なぜそうなっているか」の歴史がある
+- 既存データが存在する可能性がある
+- 「改善」が「破壊」になりうる
+- AIの「時間軸喪失問題」（meaning spaceでの操作がtime spaceの文脈を失う問題）を防ぐための構造的制約
+
 
 ---
 

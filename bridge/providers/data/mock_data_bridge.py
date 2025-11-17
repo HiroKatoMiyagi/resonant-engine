@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import copy
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
+from bridge.core.constants import PhilosophicalActor
 from bridge.core.data_bridge import DataBridge
 from bridge.core.enums import IntentStatus
+from bridge.core.errors import LockTimeoutError
+from bridge.core.locks import LockedIntentSession
 from bridge.core.models.intent_model import CorrectionRecord, IntentModel
-from bridge.core.constants import PhilosophicalActor
 
 
 class MockDataBridge(DataBridge):
@@ -21,6 +24,9 @@ class MockDataBridge(DataBridge):
         self._intents: Dict[str, IntentModel] = {}
         self._corrections: List[Dict[str, Any]] = []
         self._lock = asyncio.Lock()
+        self._intent_locks: Dict[str, asyncio.Lock] = {}
+        self._active_sessions: Dict[str, LockedIntentSession] = {}
+        self._lock_owners: Dict[str, asyncio.Task] = {}
 
     async def connect(self) -> None:  # type: ignore[override]
         await super().connect()
@@ -54,7 +60,13 @@ class MockDataBridge(DataBridge):
                 raise KeyError(f"intent not found: {intent_id}")
             return intent.model_copy(deep=True)
 
-    async def save_correction(self, intent_id: str, correction: Dict[str, Any]) -> IntentModel:
+    async def save_correction(
+        self,
+        intent_id: str,
+        correction: Dict[str, Any],
+        *,
+        persist_status: bool = True,
+    ) -> IntentModel:
         entry = copy.deepcopy(correction)
         applied_at = entry.get("applied_at")
         if applied_at is None:
@@ -72,14 +84,18 @@ class MockDataBridge(DataBridge):
 
             corrections = list(intent.correction_history)
             corrections.append(record)
-            status = IntentModel._coerce_status(
-                correction.get("status", IntentStatus.CORRECTED)
-            )
+            status = intent.status
+            version_delta = 0
+            if persist_status:
+                status = IntentModel._coerce_status(
+                    correction.get("status", IntentStatus.CORRECTED)
+                )
+                version_delta = 1
             updated = intent.with_updates(
                 correction_history=corrections,
                 status=status,
                 updated_at=record.applied_at,
-                version=intent.version + 1,
+                version=intent.version + version_delta,
             )
             self._intents[intent_id] = updated
             self._corrections.append(
@@ -95,6 +111,20 @@ class MockDataBridge(DataBridge):
             self._intents[intent.intent_id] = stored
             return stored.model_copy(deep=True)
 
+    async def update_intent_if_version_matches(
+        self,
+        intent_id: str,
+        intent: IntentModel,
+        *,
+        expected_version: int,
+    ) -> bool:
+        async with self._lock:
+            current = self._intents.get(intent_id)
+            if current is None or current.version != expected_version:
+                return False
+            self._intents[intent_id] = intent.model_copy(deep=True)
+            return True
+
     async def list_intents(self, status: Optional[IntentStatus] = None) -> List[IntentModel]:
         async with self._lock:
             intents = list(self._intents.values())
@@ -104,13 +134,64 @@ class MockDataBridge(DataBridge):
         return [intent.model_copy(deep=True) for intent in intents]
 
     async def update_intent_status(self, intent_id: str, status: Union[IntentStatus, str]) -> IntentModel:
+        status_value = IntentModel._coerce_status(status)
+        current_task = asyncio.current_task()
+        if current_task is not None and self._lock_owners.get(intent_id) == current_task:
+            session = self._active_sessions[intent_id]
+            updated = self._apply_status_update(session.intent, status_value)
+            return session.replace(updated).model_copy(deep=True)
+
+        async with self.lock_intent_for_update(intent_id) as locked:
+            updated = self._apply_status_update(locked.intent, status_value)
+            return locked.replace(updated).model_copy(deep=True)
+
+    @asynccontextmanager
+    async def lock_intent_for_update(
+        self,
+        intent_id: str,
+        *,
+        timeout: float = 5.0,
+    ) -> AsyncIterator[LockedIntentSession]:
+        if intent_id not in self._intents:
+            raise KeyError(f"intent not found: {intent_id}")
+
+        per_intent = self._intent_locks.setdefault(intent_id, asyncio.Lock())
+        session: LockedIntentSession | None = None
+        owner = asyncio.current_task()
+        if owner is None:  # pragma: no cover - event loop invariant
+            raise RuntimeError("lock_intent_for_update requires an active task")
+        try:
+            await asyncio.wait_for(per_intent.acquire(), timeout)
+        except asyncio.TimeoutError as exc:  # pragma: no cover - defensive
+            raise LockTimeoutError(f"Mock lock timeout for intent {intent_id}") from exc
+
+        try:
+            async with self._lock:
+                intent = self._intents[intent_id].model_copy(deep=True)
+            session = LockedIntentSession(intent)
+            self._active_sessions[intent_id] = session
+            self._lock_owners[intent_id] = owner
+            try:
+                yield session
+            finally:
+                await self._persist_locked_intent(session.intent)
+        finally:
+            if session is not None:
+                self._active_sessions.pop(intent_id, None)
+            if self._lock_owners.get(intent_id) == owner:
+                self._lock_owners.pop(intent_id, None)
+            if per_intent.locked():
+                per_intent.release()
+
+    async def _persist_locked_intent(self, intent: IntentModel) -> None:
         async with self._lock:
-            if intent_id not in self._intents:
-                raise KeyError(f"intent not found: {intent_id}")
-            status_value = IntentModel._coerce_status(status)
-            updated = self._intents[intent_id].with_updates(
-                status=status_value,
-                updated_at=datetime.now(timezone.utc),
-            )
-            self._intents[intent_id] = updated
-            return updated.model_copy(deep=True)
+            self._intents[intent.intent_id] = intent.model_copy(deep=True)
+
+    def _apply_status_update(self, intent: IntentModel, status: IntentStatus) -> IntentModel:
+        IntentModel.validate_status_transition(intent.status, status)
+        updated = intent.with_updates(
+            status=status,
+            updated_at=datetime.now(timezone.utc),
+        )
+        updated.increment_version()
+        return updated

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
+import random
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from bridge.core.audit_logger import AuditLogger
+from bridge.core.concurrency import ConcurrencyConfig
 from bridge.core.constants import (
     AuditEventType,
     BridgeTypeEnum,
@@ -15,6 +18,7 @@ from bridge.core.constants import (
 )
 from bridge.core.correction.diff import validate_diff
 from bridge.core.data_bridge import DataBridge
+from bridge.core.errors import ConcurrencyConflictError
 from bridge.core.exceptions import DiffApplicationError, DiffValidationError, InvalidStatusError
 from bridge.core.models.intent_model import IntentModel
 from bridge.core.models.reeval import ReEvaluationRequest, ReEvaluationResponse
@@ -96,52 +100,132 @@ async def reeval_intent(
 
     intent_id_str = str(request.intent_id)
 
-    try:
-        intent = await data_bridge.get_intent(intent_id_str)
-    except KeyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error_code": "INTENT_NOT_FOUND", "message": f"Intent {intent_id_str} not found"},
-        ) from exc
-
     if request.source not in {PhilosophicalActor.YUNO, PhilosophicalActor.KANA}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"error_code": "INVALID_SOURCE", "message": "Source actor not authorized for re-evaluation"},
         )
 
+    max_retries = ConcurrencyConfig.MAX_RETRIES
+    backoff_base = ConcurrencyConfig.RETRY_BACKOFF_BASE
+    jitter = ConcurrencyConfig.RETRY_JITTER
+
     try:
         validate_diff(request.diff)
-        updated_intent, correction_record, already_applied = intent.apply_correction(
-            request.diff,
-            source=request.source,
-            reason=request.reason,
-            metadata=request.metadata,
-        )
     except DiffValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error_code": "INVALID_DIFF", "message": str(exc)},
         ) from exc
-    except DiffApplicationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error_code": "APPLY_FAILED", "message": str(exc)},
-        ) from exc
-    except InvalidStatusError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"error_code": "INVALID_STATUS", "message": str(exc)},
-        ) from exc
 
-    if already_applied:
-        persisted_intent = intent
-    else:
-        persisted_intent = await data_bridge.update_intent(updated_intent)
-        persisted_intent = await data_bridge.save_correction(
-            persisted_intent.intent_id,
-            correction_record.model_dump(mode="json", exclude_none=True),
+    def _apply_diff_to_intent(intent: IntentModel):
+        return intent.apply_correction(
+            request.diff,
+            source=request.source,
+            reason=request.reason,
+            metadata=request.metadata,
         )
+
+    async def _apply_with_pessimistic_lock():
+        lock_ctx = getattr(data_bridge, "lock_intent_for_update", None)
+        if lock_ctx is None:
+            return None
+        updated_intent: IntentModel | None = None
+        record = None
+        already_done = False
+        async with lock_ctx(intent_id_str) as locked:  # type: ignore[misc]
+            updated_intent, record, already_done = _apply_diff_to_intent(locked.intent)
+            if already_done:
+                return locked.intent, record, True
+            locked.replace(updated_intent)
+        if updated_intent is None or record is None:
+            return None
+        persisted = await data_bridge.save_correction(
+            updated_intent.intent_id,
+            record.model_dump(mode="json", exclude_none=True),
+            persist_status=False,
+        )
+        return persisted, record, False
+
+    attempt = 0
+    persisted_intent: IntentModel | None = None
+    correction_record = None
+    already_applied = False
+    starvation_detected = False
+    fallback_used = False
+
+    while attempt < max_retries and persisted_intent is None:
+        try:
+            intent = await data_bridge.get_intent(intent_id_str)
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error_code": "INTENT_NOT_FOUND", "message": f"Intent {intent_id_str} not found"},
+            ) from exc
+
+        try:
+            original_version = intent.version
+            updated_intent, correction_record, already_applied = _apply_diff_to_intent(intent)
+        except DiffValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error_code": "INVALID_DIFF", "message": str(exc)},
+            ) from exc
+        except DiffApplicationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error_code": "APPLY_FAILED", "message": str(exc)},
+            ) from exc
+        except InvalidStatusError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"error_code": "INVALID_STATUS", "message": str(exc)},
+            ) from exc
+
+        if already_applied:
+            persisted_intent = intent
+            break
+
+        updated = await data_bridge.update_intent_if_version_matches(
+            intent_id=intent.intent_id,
+            intent=updated_intent,
+            expected_version=original_version,
+        )
+
+        if updated:
+            persisted_intent = await data_bridge.save_correction(
+                updated_intent.intent_id,
+                correction_record.model_dump(mode="json", exclude_none=True),
+                persist_status=False,
+            )
+            break
+
+        attempt += 1
+        delay = backoff_base * (2 ** attempt)
+        if jitter:
+            delay += random.uniform(-jitter, jitter)
+        delay = max(delay, 0.0)
+        await asyncio.sleep(delay)
+
+    if persisted_intent is None or correction_record is None:
+        starvation_detected = attempt >= max_retries
+        fallback_result = await _apply_with_pessimistic_lock()
+        if fallback_result is not None:
+            persisted_intent, correction_record, already_applied = fallback_result
+            fallback_used = True
+        else:
+            detail = {
+                "error_code": "CONCURRENCY_CONFLICT",
+                "message": f"Failed to re-evaluate intent {intent_id_str} after {max_retries} retries",
+            }
+            if starvation_detected:
+                detail["starvation_detected"] = True
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=detail,
+            ) from ConcurrencyConflictError(
+                f"Intent {intent_id_str} version kept changing beyond retries"
+            )
 
     log_details: Dict[str, Any] = {
         "correction_id": str(correction_record.correction_id),
@@ -152,6 +236,19 @@ async def reeval_intent(
     if request.metadata:
         log_details["metadata"] = request.metadata
 
+    if attempt:
+        log_details["retry_count"] = attempt
+    if starvation_detected:
+        log_details["starvation_detected"] = True
+    if fallback_used:
+        log_details["fallback_strategy"] = "pessimistic"
+
+    severity = LogSeverity.INFO
+    if already_applied:
+        severity = LogSeverity.DEBUG
+    elif starvation_detected:
+        severity = LogSeverity.WARNING
+
     await audit_logger.log(
         bridge_type=BridgeTypeEnum.FEEDBACK,
         operation=AuditEventType.REEVALUATED.value,
@@ -159,7 +256,7 @@ async def reeval_intent(
         intent_id=persisted_intent.intent_id,
         correlation_id=str(persisted_intent.correlation_id),
         event=AuditEventType.REEVALUATED,
-        severity=LogSeverity.INFO if not already_applied else LogSeverity.DEBUG,
+        severity=severity,
     )
 
     return ReEvaluationResponse(

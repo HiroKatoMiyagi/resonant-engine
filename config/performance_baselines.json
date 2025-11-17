@@ -1,0 +1,86 @@
+{
+  "memory_system": {
+    "baseline_date": "2025-11-17",
+    "description": "Memory System (Sprint 1-3) 完了時の性能ベースライン",
+    "components": {
+      "memory_management": {
+        "sprint": 1,
+        "tests": 72,
+        "execution_time_seconds": 0.36,
+        "tier1_completion": "100%"
+      },
+      "semantic_bridge": {
+        "sprint": 2,
+        "tests": 97,
+        "execution_time_seconds": 0.16,
+        "processing_performance_ms": 0.12,
+        "inference_accuracy_percent": 100,
+        "tier1_completion": "100%"
+      },
+      "memory_store": {
+        "sprint": 3,
+        "tests": 36,
+        "tier1_completion": "100%"
+      }
+    },
+    "thresholds": {
+      "total_tests": {
+        "min": 205,
+        "target": 205,
+        "warning_threshold": 0.95,
+        "comment": "95%未満（<195 tests）で警告"
+      },
+      "test_pass_rate": {
+        "min": 0.95,
+        "target": 1.0,
+        "comment": "95%未満のテスト通過率で警告"
+      },
+      "memory_management_tests": {
+        "min": 72,
+        "target": 72,
+        "warning_threshold": 0.90,
+        "comment": "90%未満（<65 tests）で警告"
+      },
+      "semantic_bridge_tests": {
+        "min": 97,
+        "target": 97,
+        "warning_threshold": 0.90,
+        "comment": "90%未満（<87 tests）で警告"
+      },
+      "memory_store_tests": {
+        "min": 36,
+        "target": 36,
+        "warning_threshold": 0.90,
+        "comment": "90%未満（<32 tests）で警告"
+      },
+      "inference_accuracy": {
+        "min": 80.0,
+        "target": 100.0,
+        "warning_threshold": 0.90,
+        "comment": "90%未満（<72%）で警告"
+      },
+      "processing_performance_ms": {
+        "max": 50.0,
+        "target": 0.12,
+        "warning_threshold": 10.0,
+        "comment": "10倍超過（>500ms）で警告（緩い閾値、モック環境考慮）"
+      }
+    }
+  },
+  "philosophy": {
+    "breathing_cycle_mapping": {
+      "intake": "Memory Management - record_intent()",
+      "resonance": "Semantic Bridge - semantic extraction",
+      "structuring": "Memory Store - vector embedding",
+      "re_reflection": "Type inference and categorization",
+      "implementation": "Persistent storage",
+      "resonance_expansion": "Search and retrieval"
+    },
+    "core_principles": {
+      "time_axis_preservation": "Snapshots capture complete state",
+      "choice_retention": "Options preserved without forcing",
+      "no_deletion": "Archive pattern, no data loss",
+      "versioning": "Agent contexts track evolution"
+    }
+  }
+}

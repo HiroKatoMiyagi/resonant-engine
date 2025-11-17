@@ -1,0 +1,137 @@
+name: Nightly Performance Tests
+
+on:
+  schedule:
+    # JST 3:00 (UTC 18:00) に毎日実行
+    - cron: '0 18 * * *'
+  workflow_dispatch:  # 手動実行も可能
+
+jobs:
+  performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov pytest-json-report
+
+      - name: Run Memory System Tests
+        id: memory_tests
+        run: |
+          PYTHONPATH=. python -m pytest tests/memory/ tests/semantic_bridge/ tests/test_memory_store/ \
+            -v \
+            --tb=short \
+            --junitxml=performance-results.xml \
+            --json-report \
+            --json-report-file=test-report.json \
+            --cov=bridge/memory \
+            --cov=bridge/semantic_bridge \
+            --cov=memory_store \
+            --cov-report=term \
+            --cov-report=json:coverage.json || echo "Tests completed with some failures"
+
+      - name: Extract performance metrics
+        if: always()
+        run: |
+          python scripts/extract_performance_metrics.py \
+            performance-results.xml \
+            test-report.json \
+            performance-metrics.json
+
+      - name: Check for performance regression
+        if: always()
+        id: regression_check
+        run: |
+          python scripts/check_performance_regression.py
+        continue-on-error: true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-test-results-${{ github.run_number }}
+          path: |
+            performance-results.xml
+            performance-metrics.json
+            test-report.json
+            coverage.json
+          retention-days: 90
+
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## Nightly Performance Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f performance-metrics.json ]; then
+            python -c "
+          import json
+          with open('performance-metrics.json') as f:
+              m = json.load(f)
+          print(f\"### Test Results\")
+          print(f\"- **Total Tests**: {m.get('tests_total', 'N/A')}\")
+          print(f\"- **Passed**: {m.get('tests_passed', 'N/A')}\")
+          print(f\"- **Failed**: {m.get('tests_failed', 'N/A')}\")
+          print(f\"- **Duration**: {m.get('duration_seconds', 'N/A'):.2f}s\")
+          print(f\"\")
+          print(f\"### Memory System Metrics\")
+          print(f\"- **Memory Management Tests**: {m.get('memory_management_tests', 'N/A')}\")
+          print(f\"- **Semantic Bridge Tests**: {m.get('semantic_bridge_tests', 'N/A')}\")
+          print(f\"- **Memory Store Tests**: {m.get('memory_store_tests', 'N/A')}\")
+          print(f\"- **Inference Accuracy**: {m.get('inference_accuracy', 'N/A')}%\")
+          print(f\"- **Processing Performance**: {m.get('processing_performance_ms', 'N/A')}ms/event\")
+            " >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Metrics file not found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          payload: |
+            {
+              "text": "Nightly performance tests failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Nightly Performance Tests Failed*\n\nMemory System tests detected errors.\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
+                  }
+                }
+              ]
+            }
+        continue-on-error: true
+
+      - name: Notify Slack on regression
+        if: steps.regression_check.outcome == 'failure'
+        uses: slackapi/slack-github-action@v1
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          payload: |
+            {
+              "text": "Performance regression detected",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Performance Regression Detected*\n\nMemory System performance metrics below threshold.\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details and Metrics>"
+                  }
+                }
+              ]
+            }
+        continue-on-error: true

@@ -1,6 +1,7 @@
 # Environment
 .env
 .venv/
+docker/.env
 
 # macOS
 .DS_Store

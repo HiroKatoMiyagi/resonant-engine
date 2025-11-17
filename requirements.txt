@@ -6,6 +6,10 @@ rich>=13.0.0
 # Core dependencies
 requests>=2.28.0
 python-dotenv>=1.0.0
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+aiohttp>=3.9.0
+prometheus-client>=0.20.0
 
 # Priority 1: Claude API integration (Kana)
 anthropic>=0.18.0
@@ -18,6 +22,7 @@ pydantic>=2.7.0
 # Testing suite
 pytest>=7.4.0
 pytest-asyncio>=0.21.1
+pytest-timeout>=2.4.0
 
 # Optional: Testing
 # pytest>=7.0.0

@@ -6,10 +6,12 @@ Intent処理フロー統合テスト
 3. 結果確認
 """
 import asyncio
+import os
 import requests
-import time
 from pathlib import Path
 import sys
+
+import pytest
 
 # プロジェクトルート追加
 ROOT = Path(__file__).parent.parent
@@ -18,6 +20,15 @@ sys.path.insert(0, str(ROOT))
 from dashboard.backend.intent_processor_db import IntentProcessorDB
 
 BASE_URL = "http://localhost:8000"
+RUN_LEGACY_E2E = os.getenv("RUN_LEGACY_E2E") == "1"
+
+pytestmark = [
+    pytest.mark.asyncio,
+    pytest.mark.skipif(
+        not RUN_LEGACY_E2E,
+        reason="Legacy integration flow requires RUN_LEGACY_E2E=1 with live services and Postgres.",
+    ),
+]
 
 def print_section(title):
     """セクション区切り"""

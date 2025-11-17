@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, ClassVar, Dict, Optional
 
 from bridge.core.ai_bridge import AIBridge
 from bridge.core.audit_logger import AuditLogger
@@ -18,7 +18,8 @@ from bridge.core.constants import (
 )
 from bridge.core.data_bridge import DataBridge
 from bridge.core.feedback_bridge import FeedbackBridge
-from bridge.core.models.intent_model import IntentModel
+from bridge.core.models.intent_model import CorrectionRecord, IntentModel
+from bridge.core.retry import retry_on_deadlock
 
 
 def _utcnow() -> datetime:
@@ -34,7 +35,7 @@ class BridgeSet:
     feedback: FeedbackBridge
     audit: AuditLogger
 
-    PIPELINE_ORDER: tuple[BridgeTypeEnum, ...] = (
+    PIPELINE_ORDER: ClassVar[tuple[BridgeTypeEnum, ...]] = (
         BridgeTypeEnum.INPUT,
         BridgeTypeEnum.NORMALIZE,
         BridgeTypeEnum.FEEDBACK,
@@ -80,6 +81,40 @@ class BridgeSet:
     ) -> IntentModel:
         """Execute the standard pipeline against an intent."""
 
+        if hasattr(self.data, "lock_intent_for_update"):
+            try:
+                return await self.execute_with_lock(
+                    intent.intent_id,
+                    mode=mode,
+                    initial_intent=intent,
+                )
+            except KeyError:
+                # Intent is not yet persisted; fall back to optimistic execution
+                pass
+        return await self._execute_pipeline(intent, mode=mode)
+
+    @retry_on_deadlock()
+    async def execute_with_lock(
+        self,
+        intent_id: str,
+        *,
+        initial_intent: IntentModel | None = None,
+        mode: ExecutionMode = ExecutionMode.FAILFAST,
+    ) -> IntentModel:
+        """Convenience wrapper that locks the intent before executing the pipeline."""
+
+        async with self.data.lock_intent_for_update(intent_id) as locked:
+            if initial_intent is not None:
+                locked.replace(initial_intent)
+            result = await self._execute_pipeline(locked.intent, mode=mode)
+            return locked.replace(result)
+
+    async def _execute_pipeline(
+        self,
+        intent: IntentModel,
+        *,
+        mode: ExecutionMode = ExecutionMode.FAILFAST,
+    ) -> IntentModel:
         current = intent
         for stage in self.PIPELINE_ORDER:
             try:
@@ -132,13 +167,17 @@ class BridgeSet:
                 intent.model_dump_bridge(),
                 intent.correction_history,
             )
-            feedback_entry = {
-                "stage": "feedback",
-                "result": feedback_result,
-                "recorded_at": _utcnow().isoformat(),
-            }
+            feedback_record = CorrectionRecord.model_validate(
+                {
+                    "reason": "feedback-analysis",
+                    "metadata": {
+                        "stage": "feedback",
+                        "result": feedback_result,
+                    },
+                }
+            )
             corrections = list(intent.correction_history)
-            corrections.append(feedback_entry)
+            corrections.append(feedback_record)
             status = intent.status
             updated_intent = intent.with_updates(
                 correction_history=corrections,
@@ -150,12 +189,17 @@ class BridgeSet:
                     [feedback_result],
                     evaluation=feedback_result,
                 )
-                correction_entry = {
-                    "stage": "correction",
-                    "plan": correction_plan,
-                    "generated_at": _utcnow().isoformat(),
-                }
-                corrections.append(correction_entry)
+                correction_record = CorrectionRecord.model_validate(
+                    {
+                        "reason": "feedback-correction",
+                        "diff": correction_plan.get("diff") or {},
+                        "metadata": {
+                            "stage": "correction",
+                            "plan": correction_plan,
+                        },
+                    }
+                )
+                corrections.append(correction_record)
                 updated_intent = updated_intent.with_updates(
                     correction_history=corrections,
                     updated_at=_utcnow(),
@@ -170,7 +214,7 @@ class BridgeSet:
                     "status": IntentStatusEnum.CORRECTED.value,
                     "correction_plan": correction_plan,
                     "feedback": feedback_result,
-                    "generated_at": correction_entry["generated_at"],
+                    "generated_at": correction_record.applied_at.isoformat(),
                     "diff": correction_plan.get("diff"),
                 }
                 if latest_record is not None:

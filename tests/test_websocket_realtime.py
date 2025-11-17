@@ -8,6 +8,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 # プロジェクトルートをパスに追加
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
@@ -17,6 +19,15 @@ import os
 
 load_dotenv(ROOT / ".env")
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://resonant@localhost:5432/resonant")
+RUN_LEGACY_E2E = os.getenv("RUN_LEGACY_E2E") == "1"
+
+pytestmark = [
+    pytest.mark.asyncio,
+    pytest.mark.skipif(
+        not RUN_LEGACY_E2E,
+        reason="Legacy realtime smoke test requires RUN_LEGACY_E2E=1 with live Postgres and consumers.",
+    ),
+]
 
 async def test_notify():
     """PostgreSQL NOTIFYトリガーのテスト"""

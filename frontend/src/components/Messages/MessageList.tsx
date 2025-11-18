@@ -42,7 +42,7 @@ export default function MessageList() {
     }
   };
 
-  const getTypeLabel = (type: Message['message_type']) => {
+  const getTypeLabel = (type: Message['message_type']): string => {
     switch (type) {
       case 'user':
         return 'USER';
@@ -52,8 +52,6 @@ export default function MessageList() {
         return 'KANA';
       case 'system':
         return 'SYSTEM';
-      default:
-        return type.toUpperCase();
     }
   };
 

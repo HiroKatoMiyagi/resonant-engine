@@ -2,6 +2,7 @@ import json
 import logging
 import uuid
 from datetime import datetime
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -10,28 +11,41 @@ class IntentProcessor:
     def __init__(self, pool, config):
         self.pool = pool
         self.config = config
-        self.claude = None
-        self.claude_code_client = None
+        self.ai_bridge = None  # KanaAIBridge（Context Assembler統合）
+        self.claude_code_client = None  # Claude Code Client
+        self.classifier = None  # Intent Classifier
 
-        # Initialize Claude API client if API key is available
-        if config.get('anthropic_api_key'):
-            try:
-                import anthropic
-                self.claude = anthropic.Anthropic(
-                    api_key=config['anthropic_api_key']
-                )
-            except ImportError:
-                logger.warning("Anthropic package not installed, using mock response")
-
-        # Initialize Claude Code Client
+    async def initialize(self):
+        """非同期初期化: KanaAIBridge、Claude Code Client、Classifierを生成"""
+        from bridge.factory.bridge_factory import BridgeFactory
         from .claude_code_client import ClaudeCodeClient
-        self.claude_code_client = ClaudeCodeClient()
-
-        # Initialize Intent Classifier
         from .classifier import IntentClassifier
-        self.classifier = IntentClassifier()
+
+        try:
+            # KanaAIBridge（Context Assembler統合）初期化
+            self.ai_bridge = await BridgeFactory.create_ai_bridge_with_memory(
+                bridge_type="kana",
+                pool=self.pool,
+            )
+            logger.info("✅ KanaAIBridge initialized with Context Assembler")
+
+            # Claude Code Client初期化
+            self.claude_code_client = ClaudeCodeClient()
+            logger.info("✅ Claude Code Client initialized")
+
+            # Intent Classifier初期化
+            self.classifier = IntentClassifier()
+            logger.info("✅ Intent Classifier initialized")
+
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize IntentProcessor components: {e}")
+            raise
 
     async def process(self, intent_id):
+        # 初回呼び出し時のみ初期化
+        if self.ai_bridge is None:
+            await self.initialize()
+
         async with self.pool.acquire() as conn:
             # 1. Intent取得
             intent = await conn.fetchrow(
@@ -64,11 +78,29 @@ class IntentProcessor:
                     logger.info(f"⚙️  Processing with Claude Code...")
                     response = await self._process_with_claude_code(conn, intent)
                 else:
-                    # Claude APIで処理（従来通り）
-                    logger.info(f"💬 Processing with Claude API...")
-                    response = await self._process_with_claude_api(intent)
+                    # KanaAIBridge経由でClaude API処理（Context Assembler統合）
+                    logger.info(f"💬 Processing with KanaAIBridge (Context Assembler)...")
+                    response = await self.call_claude(
+                        description=intent['description'],
+                        user_id=intent.get('user_id', 'hiroki'),
+                        session_id=intent.get('session_id'),
+                    )
 
                 # 5. 結果保存
+                # response構造を統一: message-response形式に変換
+                if intent_type == 'code_execution':
+                    result_data = response  # 既に完全な形式
+                else:
+                    # KanaAIBridge応答を統一形式に変換
+                    result_data = {
+                        "type": "chat",
+                        "response": response["response"],
+                        "model": response["model"],
+                        "usage": response.get("usage", {}),
+                        "context_metadata": response.get("context_metadata"),  # Context Assembler metadata
+                        "processed_at": response["processed_at"],
+                    }
+
                 await conn.execute("""
                     UPDATE intents
                     SET status = 'completed',
@@ -76,12 +108,17 @@ class IntentProcessor:
                         processed_at = NOW(),
                         updated_at = NOW()
                     WHERE id = $2
-                """, json.dumps(response), intent_id)
+                """, json.dumps(result_data), intent_id)
 
                 # 6. 通知作成
                 await self.create_notification(conn, intent_id, 'success', intent_type)
 
                 logger.info(f"✅ Intent {intent_id} processed successfully ({intent_type})")
+                if intent_type == 'chat' and response.get("context_metadata"):
+                    logger.info(
+                        f"📊 Context: WM={response['context_metadata']['working_memory_count']}, "
+                        f"SM={response['context_metadata']['semantic_memory_count']}"
+                    )
 
             except Exception as e:
                 logger.error(f"Error processing intent: {e}")
@@ -95,6 +132,61 @@ class IntentProcessor:
 
                 await self.create_notification(conn, intent_id, 'error', intent_type)
                 logger.error(f"❌ Intent {intent_id} failed: {e}")
+
+    async def call_claude(
+        self,
+        description: str,
+        user_id: str = "hiroki",
+        session_id: Optional[str] = None,
+    ):
+        """
+        KanaAIBridge経由でClaude APIを呼び出し（Context Assembler統合）
+
+        Args:
+            description: Intent内容
+            user_id: ユーザーID
+            session_id: セッションID（オプション）
+
+        Returns:
+            dict: {
+                "response": str,
+                "model": str,
+                "usage": dict,
+                "context_metadata": dict,  # Context Assemblerメタデータ
+                "processed_at": str,
+            }
+        """
+        if self.ai_bridge:
+            try:
+                # KanaAIBridge.process_intent()を呼び出し
+                result = await self.ai_bridge.process_intent({
+                    "content": description,
+                    "user_id": user_id,
+                    "session_id": session_id,
+                })
+
+                # レスポンス整形
+                return {
+                    "response": result.get("summary", ""),
+                    "model": result.get("model", "unknown"),
+                    "usage": result.get("usage", {}),
+                    "context_metadata": result.get("context_metadata"),
+                    "processed_at": datetime.utcnow().isoformat(),
+                }
+
+            except Exception as e:
+                logger.error(f"KanaAIBridge error: {e}")
+                raise
+
+        # Fallback: Mock応答（ai_bridgeが初期化失敗した場合のみ）
+        logger.warning("⚠️ Using mock response (KanaAIBridge not initialized)")
+        return {
+            "response": f"[Mock Response] Intent processed: {description[:100]}",
+            "model": "mock",
+            "usage": {"input_tokens": 0, "output_tokens": 0},
+            "context_metadata": None,
+            "processed_at": datetime.utcnow().isoformat(),
+        }
 
     async def _process_with_claude_code(self, conn, intent) -> dict:
         """Claude Codeで処理"""
@@ -170,50 +262,6 @@ class IntentProcessor:
                 WHERE id = $2
             """, str(e), session['id'])
             raise
-
-    async def _process_with_claude_api(self, intent) -> dict:
-        """Claude APIで処理（Sprint 4からの既存実装）"""
-        if self.claude:
-            try:
-                message = self.claude.messages.create(
-                    model="claude-sonnet-4-20250514",
-                    max_tokens=4096,
-                    messages=[{
-                        "role": "user",
-                        "content": f"""あなたはResonant EngineのKana（外界翻訳層）です。
-以下のIntentを処理し、適切な応答を生成してください。
-
-Intent: {intent['description']}
-
-応答形式:
-- 明確で構造化された回答
-- 具体的なアクションアイテム（あれば）
-- 次のステップの提案"""
-                    }]
-                )
-
-                return {
-                    'type': 'chat',
-                    'response': message.content[0].text,
-                    'model': message.model,
-                    'usage': {
-                        'input_tokens': message.usage.input_tokens,
-                        'output_tokens': message.usage.output_tokens
-                    },
-                    'processed_at': datetime.utcnow().isoformat()
-                }
-            except Exception as e:
-                logger.error(f"Claude API error: {e}")
-                raise
-
-        # Mock response when no API key
-        return {
-            'type': 'chat',
-            'response': f"[Mock Response] Intent processed: {intent['description'][:100]}",
-            'model': 'mock',
-            'usage': {'input_tokens': 0, 'output_tokens': 0},
-            'processed_at': datetime.utcnow().isoformat()
-        }
 
     async def create_notification(self, conn, intent_id, status, intent_type='unknown'):
         if status == 'success':

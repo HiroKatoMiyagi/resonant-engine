@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Any, Optional
+
+import asyncpg
 
 from bridge.core.ai_bridge import AIBridge
 from bridge.core.audit_logger import AuditLogger
@@ -40,6 +42,58 @@ class BridgeFactory:
             return KanaAIBridge()
         if bridge_key == "mock":
             return MockAIBridge()
+        raise ValueError(f"Unsupported AI_BRIDGE_TYPE: {bridge_key}")
+
+    @staticmethod
+    async def create_ai_bridge_with_memory(
+        bridge_type: Optional[str] = None,
+        pool: Optional[asyncpg.Pool] = None,
+    ) -> AIBridge:
+        """
+        Context Assembler統合版のAI Bridgeを生成
+
+        Args:
+            bridge_type: "kana", "claude", "mock"（デフォルト: 環境変数AI_BRIDGE_TYPE）
+            pool: PostgreSQL接続プール（Noneの場合はFactoryが新規作成）
+
+        Returns:
+            AIBridge: Context Assembler統合済みのAI Bridge
+
+        Raises:
+            ValueError: 未対応のbridge_type
+            ConnectionError: Context Assembler初期化失敗
+
+        Example:
+            >>> bridge = await BridgeFactory.create_ai_bridge_with_memory("kana")
+            >>> result = await bridge.process_intent({
+            ...     "content": "Memory Storeについて教えて",
+            ...     "user_id": "hiroki"
+            ... })
+        """
+        from context_assembler.factory import create_context_assembler
+
+        bridge_key = (bridge_type or os.getenv("AI_BRIDGE_TYPE", "kana")).lower()
+
+        if bridge_key in {"kana", "claude"}:
+            # Context Assembler初期化
+            try:
+                context_assembler = await create_context_assembler(pool=pool)
+            except (ConnectionError, ValueError, ImportError) as e:
+                # Context Assembler初期化失敗 → Fallback（Context Assemblerなし）
+                import warnings
+
+                warnings.warn(
+                    f"Context Assembler initialization failed: {e}. "
+                    f"Falling back to KanaAIBridge without context memory."
+                )
+                return KanaAIBridge()  # context_assembler=None
+
+            return KanaAIBridge(context_assembler=context_assembler)
+
+        if bridge_key == "mock":
+            # Mockは従来通り（Context Assemblerなし）
+            return MockAIBridge()
+
         raise ValueError(f"Unsupported AI_BRIDGE_TYPE: {bridge_key}")
 
     @staticmethod

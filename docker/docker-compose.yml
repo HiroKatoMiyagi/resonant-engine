@@ -16,6 +16,8 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
       - ./postgres/002_intent_notify.sql:/docker-entrypoint-initdb.d/02_intent_notify.sql:ro
+      - ./postgres/003_message_notify.sql:/docker-entrypoint-initdb.d/03_message_notify.sql:ro
+      - ./postgres/004_claude_code_tables.sql:/docker-entrypoint-initdb.d/04_claude_code_tables.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-resonant} -d ${POSTGRES_DB:-resonant_dashboard}"]
       interval: 10s
@@ -86,6 +88,32 @@ services:
       context: ../intent_bridge
       dockerfile: Dockerfile
     container_name: resonant_intent_bridge
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-resonant}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-resonant_dashboard}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    networks:
+      - resonant_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  message_bridge:
+    build:
+      context: ../message_bridge
+      dockerfile: Dockerfile
+    container_name: resonant_message_bridge
     restart: unless-stopped
     environment:
       POSTGRES_HOST: postgres

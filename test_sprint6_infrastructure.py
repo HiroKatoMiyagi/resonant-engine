@@ -27,8 +27,8 @@ from typing import Optional
 sys.path.insert(0, '/Users/zero/Projects/resonant-engine')
 
 # データベース接続情報
-# Note: ローカルPostgreSQLインスタンスを使用（Docker Composeのポート5432が競合）
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://zero@localhost:5432/resonant")
+# Note: Docker Compose環境のPostgreSQLを使用（パスワード認証なし）
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://resonant@localhost:5432/resonant_dashboard")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 
@@ -127,8 +127,8 @@ class Sprint6IntegrationTest:
                     nullable = "NULL可" if col['is_nullable'] == 'YES' else "NOT NULL"
                     print(f"     - {col['column_name']}: {col['data_type']} ({nullable})")
                 
-                # 必須カラム確認（実際のスキーマに基づく）
-                required_columns = ['id', 'user_id', 'sender', 'content', 'created_at']
+                # 必須カラム確認（Docker環境のスキーマに基づく）
+                required_columns = ['id', 'user_id', 'content', 'message_type', 'metadata', 'created_at']
                 column_names = [col['column_name'] for col in columns]
                 
                 for req in required_columns:
@@ -152,26 +152,21 @@ class Sprint6IntegrationTest:
         
         try:
             async with self.pool.acquire() as conn:
-                # 既存ユーザーを取得（usersテーブルに外部キー制約あり）
-                existing_user = await conn.fetchrow("SELECT id FROM users LIMIT 1")
-                if not existing_user:
-                    print("  ⚠️ usersテーブルにデータがありません（スキップ）")
-                    self.test_results.append(("TC-03: Insert Test Message", None))
-                    return None
-                
-                test_user_id = existing_user['id']
+                # テストユーザーID（Docker環境ではVARCHAR）
+                test_user_id = "test_user_sprint6"
                 
                 # テストメッセージ挿入
                 result = await conn.fetchrow("""
-                    INSERT INTO messages (user_id, sender, content)
-                    VALUES ($1, $2, $3)
-                    RETURNING id, user_id, sender, content, created_at
-                """, test_user_id, "test_user", "Sprint 6 integration test message")
+                    INSERT INTO messages (user_id, content, message_type, metadata)
+                    VALUES ($1, $2, $3, $4::jsonb)
+                    RETURNING id, user_id, content, message_type, created_at
+                """, test_user_id, "Sprint 6 integration test message", "user",
+                    json.dumps({"test": "sprint6", "timestamp": datetime.now().isoformat()}))
                 
                 print(f"  ✅ メッセージID: {result['id']}")
                 print(f"  ✅ ユーザーID: {result['user_id']}")
-                print(f"  ✅ 送信者: {result['sender']}")
                 print(f"  ✅ 内容: {result['content']}")
+                print(f"  ✅ タイプ: {result['message_type']}")
                 print(f"  ✅ 作成日時: {result['created_at']}")
                 
                 # 挿入確認
@@ -198,7 +193,7 @@ class Sprint6IntegrationTest:
             async with self.pool.acquire() as conn:
                 # 直近10件取得
                 messages = await conn.fetch("""
-                    SELECT id, user_id, sender, content, created_at
+                    SELECT id, user_id, content, message_type, created_at
                     FROM messages
                     ORDER BY created_at DESC
                     LIMIT 10
@@ -207,7 +202,7 @@ class Sprint6IntegrationTest:
                 print(f"  ✅ 取得件数: {len(messages)}件")
                 for msg in messages:
                     content_preview = msg['content'][:50] if msg['content'] else ""
-                    print(f"     - ID:{msg['id']} [{msg['sender']}] {content_preview}...")
+                    print(f"     - ID:{msg['id']} [{msg['message_type']}] {content_preview}...")
                 
                 # Context Assembler の Working Memory 相当
                 if len(messages) > 0:
@@ -230,7 +225,7 @@ class Sprint6IntegrationTest:
             async with self.pool.acquire() as conn:
                 # Working Memory（直近10件）
                 working_memory = await conn.fetch("""
-                    SELECT id, sender, content, created_at
+                    SELECT id, message_type, content, created_at
                     FROM messages
                     ORDER BY created_at DESC
                     LIMIT 10
@@ -242,7 +237,7 @@ class Sprint6IntegrationTest:
                 messages = []
                 for msg in reversed(working_memory):  # 古い順に
                     messages.append({
-                        "role": "user" if msg['sender'] == "user" else "assistant",
+                        "role": "user" if msg['message_type'] == "user" else "assistant",
                         "content": msg['content']
                     })
                 
@@ -328,26 +323,17 @@ class Sprint6IntegrationTest:
         
         try:
             async with self.pool.acquire() as conn:
-                # 既存ユーザーを取得
-                existing_user = await conn.fetchrow("SELECT id FROM users LIMIT 1")
-                if not existing_user:
-                    print("  ⚠️ usersテーブルにデータがありません（スキップ）")
-                    self.test_results.append(("TC-07: Intent Bridge Simulation", None))
-                    return None
-                
-                test_user_id = existing_user['id']
-                
-                # Intent作成シミュレーション
+                # Intent作成シミュレーション（Docker環境のスキーマに合わせる）
                 result = await conn.fetchrow("""
-                    INSERT INTO intents (user_id, type, data, status, source)
-                    VALUES ($1, $2, $3::jsonb, $4, $5)
-                    RETURNING id, user_id, type, status, created_at
-                """, test_user_id, "test", 
-                    json.dumps({"test": "sprint6", "context_assembly": True}),
-                    "pending", "test_suite")
+                    INSERT INTO intents (description, intent_type, status, metadata)
+                    VALUES ($1, $2, $3, $4::jsonb)
+                    RETURNING id, description, intent_type, status, created_at
+                """, "Sprint 6 Context Assembler統合テスト用Intent", "test", "pending",
+                    json.dumps({"test": "sprint6", "context_assembly": True}))
                 
                 print(f"  ✅ Intent作成: ID={result['id']}")
-                print(f"  ✅ タイプ: {result['type']}")
+                print(f"  ✅ 説明: {result['description']}")
+                print(f"  ✅ タイプ: {result['intent_type']}")
                 print(f"  ✅ ステータス: {result['status']}")
                 
                 # Context Assembler統合シミュレーション

@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:15-alpine
+    image: ankane/pgvector:v0.5.1  # PostgreSQL 15 + pgvector support
     ports:
       - "5432:5432"
     environment:
@@ -9,6 +9,11 @@ services:
       - POSTGRES_DB=resonant
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./docker/postgres/002_intent_notify.sql:/docker-entrypoint-initdb.d/02_intent_notify.sql:ro
+      - ./docker/postgres/003_message_notify.sql:/docker-entrypoint-initdb.d/03_message_notify.sql:ro
+      - ./docker/postgres/004_claude_code_tables.sql:/docker-entrypoint-initdb.d/04_claude_code_tables.sql:ro
+      - ./docker/postgres/005_memory_system.sql:/docker-entrypoint-initdb.d/05_memory_system.sql:ro
 
 volumes:
   postgres_data:

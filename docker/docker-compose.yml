@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   postgres:
-    image: postgres:15-alpine
+    image: ankane/pgvector:v0.5.1  # PostgreSQL 15 + pgvector support
     container_name: resonant_postgres
     restart: unless-stopped
     ports:
@@ -18,6 +18,7 @@ services:
       - ./postgres/002_intent_notify.sql:/docker-entrypoint-initdb.d/02_intent_notify.sql:ro
       - ./postgres/003_message_notify.sql:/docker-entrypoint-initdb.d/03_message_notify.sql:ro
       - ./postgres/004_claude_code_tables.sql:/docker-entrypoint-initdb.d/04_claude_code_tables.sql:ro
+      - ./postgres/005_memory_system.sql:/docker-entrypoint-initdb.d/05_memory_system.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-resonant} -d ${POSTGRES_DB:-resonant_dashboard}"]
       interval: 10s

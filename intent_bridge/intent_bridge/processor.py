@@ -14,6 +14,7 @@ class IntentProcessor:
         self.ai_bridge = None  # KanaAIBridge（Context Assembler統合）
         self.claude_code_client = None  # Claude Code Client
         self.classifier = None  # Intent Classifier
+        self.session_manager = None  # Sprint 7: Session Manager
 
     async def initialize(self):
         """非同期初期化: KanaAIBridge、Claude Code Client、Classifierを生成"""
@@ -37,9 +38,30 @@ class IntentProcessor:
             self.classifier = IntentClassifier()
             logger.info("✅ Intent Classifier initialized")
 
+            # Sprint 7: SessionManager初期化
+            await self._initialize_session_manager()
+
         except Exception as e:
             logger.error(f"❌ Failed to initialize IntentProcessor components: {e}")
             raise
+
+    async def _initialize_session_manager(self):
+        """Sprint 7: SessionManagerを初期化"""
+        try:
+            from memory_store.session_summary_repository import SessionSummaryRepository
+            from summarization.service import SummarizationService
+            from session.manager import SessionManager
+
+            summary_repo = SessionSummaryRepository(self.pool)
+            summarization_service = SummarizationService(summary_repo=summary_repo)
+            self.session_manager = SessionManager(
+                summary_repo=summary_repo,
+                summarization_service=summarization_service,
+            )
+            logger.info("✅ SessionManager initialized")
+        except Exception as e:
+            logger.warning(f"⚠️ SessionManager initialization failed: {e}")
+            self.session_manager = None
 
     async def process(self, intent_id):
         # 初回呼び出し時のみ初期化
@@ -119,6 +141,13 @@ class IntentProcessor:
                         f"📊 Context: WM={response['context_metadata']['working_memory_count']}, "
                         f"SM={response['context_metadata']['semantic_memory_count']}"
                     )
+
+                # Sprint 7: Session Summary自動生成チェック
+                await self._check_session_summary(
+                    conn=conn,
+                    user_id=intent.get('user_id', 'hiroki'),
+                    session_id=intent.get('session_id'),
+                )
 
             except Exception as e:
                 logger.error(f"Error processing intent: {e}")
@@ -262,6 +291,56 @@ class IntentProcessor:
                 WHERE id = $2
             """, str(e), session['id'])
             raise
+
+    async def _check_session_summary(
+        self,
+        conn,
+        user_id: str,
+        session_id: Optional[str],
+    ) -> None:
+        """Sprint 7: Session Summary生成チェック"""
+        if not session_id or not self.session_manager:
+            return
+
+        try:
+            # メッセージを取得（直近100件）
+            messages_rows = await conn.fetch("""
+                SELECT content, message_type as role, created_at
+                FROM messages
+                WHERE user_id = $1
+                ORDER BY created_at DESC
+                LIMIT 100
+            """, user_id)
+
+            if not messages_rows:
+                return
+
+            # メッセージを辞書形式に変換（新しい順→古い順に変換）
+            messages = [
+                {
+                    'role': row['role'],
+                    'content': row['content'],
+                    'created_at': row['created_at'],
+                }
+                for row in reversed(messages_rows)  # 古い順に変換
+            ]
+
+            # 要約生成チェック
+            from uuid import UUID
+            summary = await self.session_manager.check_and_create_summary(
+                user_id=user_id,
+                session_id=UUID(session_id),
+                messages=messages,
+            )
+
+            if summary:
+                logger.info(
+                    f"📝 Session Summary created for session {session_id}: "
+                    f"{summary.summary[:80]}..."
+                )
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to check session summary: {e}")
+            # エラーでも処理は継続（非クリティカル）
 
     async def create_notification(self, conn, intent_id, status, intent_type='unknown'):
         if status == 'success':

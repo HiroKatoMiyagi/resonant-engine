@@ -19,6 +19,13 @@ from .models import (
 )
 from .token_estimator import TokenEstimator
 
+# Sprint 7: Session Summary support
+try:
+    from memory_store.session_summary_repository import SessionSummaryRepository
+    HAS_SESSION_SUMMARY = True
+except ImportError:
+    HAS_SESSION_SUMMARY = False
+
 
 class ContextAssemblerService:
     """
@@ -34,12 +41,15 @@ class ContextAssemblerService:
         message_repository: MessageRepository,
         session_repository: SessionRepository,
         config: ContextConfig,
+        session_summary_repository: Optional['SessionSummaryRepository'] = None,
     ):
         self.retrieval = retrieval_orchestrator
         self.message_repo = message_repository
         self.session_repo = session_repository
         self.config = config
         self.token_estimator = TokenEstimator()
+        # Sprint 7: Session Summary Repository
+        self.summary_repo = session_summary_repository
 
     async def assemble_context(
         self,
@@ -139,7 +149,7 @@ class ContextAssemblerService:
 
         # Session Summary
         if session_id and options.include_session_summary:
-            tasks.append(self._fetch_session_summary(session_id))
+            tasks.append(self._fetch_session_summary(user_id, session_id))
         else:
             # ダミータスク（Noneを返す）
             async def empty_summary():
@@ -172,8 +182,24 @@ class ContextAssemblerService:
         )
         return response.results
 
-    async def _fetch_session_summary(self, session_id: UUID) -> Optional[str]:
-        """Session Summary: セッションの要約を取得"""
+    async def _fetch_session_summary(self, user_id: str, session_id: UUID) -> Optional[str]:
+        """
+        Session Summary: セッションの要約を取得
+
+        Sprint 7: SessionSummaryRepositoryから取得（優先）
+        Fallback: SessionRepositoryのmetadataから取得
+        """
+        # Sprint 7: SessionSummaryRepositoryから取得
+        if self.summary_repo:
+            try:
+                summary = await self.summary_repo.get_latest(user_id, session_id)
+                if summary:
+                    return summary.summary
+            except Exception as e:
+                import logging
+                logging.warning(f"Failed to fetch session summary: {e}")
+
+        # Fallback: 既存のSessionRepositoryから取得
         session = await self.session_repo.get_by_id(session_id)
         if session and session.metadata:
             return session.metadata.get("summary")

@@ -7,6 +7,7 @@ Pydantic models for memory storage and retrieval.
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -99,3 +100,32 @@ class MemoryStoreConfig(BaseModel):
     working_memory_ttl_hours: int = 24
     cache_enabled: bool = True
     max_cache_size: int = 10000
+
+
+# Sprint 7: Session Summary Models
+
+class SessionSummaryResponse(BaseModel):
+    """Session Summary応答モデル"""
+    id: UUID
+    user_id: str
+    session_id: UUID
+    summary: str
+    message_count: int = Field(ge=0, description="要約に含まれるメッセージ数")
+    start_time: datetime
+    end_time: datetime
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SessionStats(BaseModel):
+    """セッション統計モデル"""
+    session_id: UUID
+    message_count: int
+    first_message_time: Optional[datetime] = None
+    last_message_time: Optional[datetime] = None
+    duration_seconds: Optional[int] = None
+    has_summary: bool = False
+    last_summary_time: Optional[datetime] = None

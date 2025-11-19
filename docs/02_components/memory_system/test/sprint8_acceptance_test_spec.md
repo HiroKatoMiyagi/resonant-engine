@@ -251,39 +251,26 @@ def test_parse_goals():
 
 **目的**: ProfileContextProviderが適切なコンテキストを生成できることを確認
 
+**前提条件**:
+- Docker環境のPostgreSQLが起動している
+- CLAUDE.md同期済み（hiroki ユーザーのデータがDB に存在）
+
 **テスト手順**:
 ```python
 @pytest.mark.asyncio
-async def test_profile_context_generation():
-    # Mock Repository
-    repo = MagicMock()
-    repo.get_profile = AsyncMock(return_value=UserProfileData(
-        profile=UserProfile(user_id="hiroki", full_name="加藤宏啓"),
-        cognitive_traits=[
-            CognitiveTrait(
-                user_id="hiroki",
-                trait_type="asd_choice",
-                trait_name="選択肢を奪われることが苦手",
-                importance_level="critical"
-            )
-        ],
-        family_members=[
-            FamilyMember(user_id="hiroki", name="幸恵", relationship="spouse")
-        ],
-        goals=[
-            UserGoal(
-                user_id="hiroki",
-                goal_category="financial",
-                goal_title="月収50万円",
-                priority="critical"
-            )
-        ],
-        resonant_concepts=[]
-    ))
-    
+async def test_profile_context_generation(db_pool):
+    """実際のDBからプロフィールコンテキストを生成"""
+    # 1. CLAUDE.md同期（テストデータ準備）
+    sync_service = ClaudeMdSync(db_pool, "CLAUDE.md")
+    await sync_service.sync()
+
+    # 2. Profile Context Provider作成
+    repo = UserProfileRepository(db_pool)
     provider = ProfileContextProvider(repo)
+
+    # 3. コンテキスト取得
     context = await provider.get_profile_context("hiroki")
-    
+
     # 検証
     assert context is not None
     assert context.system_prompt_adjustment != ""
@@ -305,38 +292,29 @@ async def test_profile_context_generation():
 
 **目的**: 認知特性に基づくSystem Prompt調整が適切に生成されることを確認
 
+**前提条件**:
+- Docker環境のPostgreSQLが起動している
+- CLAUDE.md同期済み
+
 **テスト手順**:
 ```python
 @pytest.mark.asyncio
-async def test_system_prompt_adjustment():
-    repo = MagicMock()
-    repo.get_profile = AsyncMock(return_value=UserProfileData(
-        profile=UserProfile(user_id="hiroki"),
-        cognitive_traits=[
-            CognitiveTrait(
-                user_id="hiroki",
-                trait_type="asd_trigger",
-                trait_name="選択肢の剥奪",
-                importance_level="critical"
-            ),
-            CognitiveTrait(
-                user_id="hiroki",
-                trait_type="asd_trigger",
-                trait_name="否定",
-                importance_level="critical"
-            )
-        ],
-        family_members=[],
-        goals=[],
-        resonant_concepts=[]
-    ))
-    
+async def test_system_prompt_adjustment(db_pool):
+    """実際のDBから認知特性を取得してSystem Prompt調整を生成"""
+    # 1. CLAUDE.md同期（テストデータ準備）
+    sync_service = ClaudeMdSync(db_pool, "CLAUDE.md")
+    await sync_service.sync()
+
+    # 2. Profile Context Provider作成
+    repo = UserProfileRepository(db_pool)
     provider = ProfileContextProvider(repo)
+
+    # 3. コンテキスト取得
     context = await provider.get_profile_context("hiroki")
-    
+
     # System Prompt調整検証
     adjustment = context.system_prompt_adjustment
-    
+
     assert "ASD" in adjustment or "認知特性" in adjustment
     assert "選択肢" in adjustment
     assert "否定" in adjustment or "肯定的" in adjustment
@@ -469,28 +447,38 @@ async def test_context_assembler_integration(db_pool):
 
 **目的**: ProfileContextProviderのキャッシング機能が動作することを確認
 
+**前提条件**:
+- Docker環境のPostgreSQLが起動している
+- CLAUDE.md同期済み
+
 **テスト手順**:
 ```python
 @pytest.mark.asyncio
 async def test_profile_context_caching(db_pool):
+    """実際のDBを使用してキャッシング機能をテスト"""
+    # CLAUDE.md同期（テストデータ準備）
+    sync_service = ClaudeMdSync(db_pool, "CLAUDE.md")
+    await sync_service.sync()
+
+    # Profile Context Provider作成
     repo = UserProfileRepository(db_pool)
     provider = ProfileContextProvider(repo)
-    
+
     # 1回目: DB取得
     start_time = time.time()
     context1 = await provider.get_profile_context("hiroki")
     first_duration = time.time() - start_time
-    
+
     # 2回目: キャッシュヒット
     start_time = time.time()
     context2 = await provider.get_profile_context("hiroki")
     second_duration = time.time() - start_time
-    
+
     # 検証
     assert context1 is not None
     assert context2 is not None
     assert context1.token_count == context2.token_count
-    
+
     # キャッシュヒット時は高速
     assert second_duration < first_duration / 2
     assert second_duration < 0.01  # < 10ms
@@ -509,38 +497,43 @@ async def test_profile_context_caching(db_pool):
 
 **目的**: CLAUDE.md → DB → Context Assembly → Claude API の完全フローが動作することを確認
 
+**前提条件**:
+- Docker環境のPostgreSQLが起動している
+- 環境変数 ANTHROPIC_API_KEY が設定されている
+
 **テスト手順**:
 ```python
 @pytest.mark.asyncio
 async def test_full_flow_e2e(db_pool):
+    """Docker環境で実際のClaude APIを使用したE2Eテスト"""
     # 1. CLAUDE.md同期
     sync_service = ClaudeMdSync(db_pool, "CLAUDE.md")
     result = await sync_service.sync()
     assert result["status"] == "ok"
-    
+
     # 2. Context Assembler作成
     assembler = await create_context_assembler(pool=db_pool)
-    
+
     # 3. コンテキスト組み立て
     assembled = await assembler.assemble_context(
         user_message="次のSprintの企画をしたい",
         user_id="hiroki",
         session_id="test_session"
     )
-    
-    # 4. Claude API呼び出し（Mock）
+
+    # 4. Claude API呼び出し（実際のAPI使用）
     from bridge.factory.bridge_factory import BridgeFactory
     bridge = await BridgeFactory.create_ai_bridge_with_memory(
         bridge_type="kana",
         pool=db_pool
     )
-    
+
     response = await bridge.process_intent({
         "content": "次のSprintの企画をしたい",
         "user_id": "hiroki",
         "session_id": "test_session"
     })
-    
+
     # 検証
     assert response is not None
     assert "summary" in response or "response" in response
@@ -559,37 +552,44 @@ async def test_full_flow_e2e(db_pool):
 
 **目的**: 認知特性への配慮がClaude APIの応答に反映されることを確認
 
+**前提条件**:
+- Docker環境のPostgreSQLが起動している
+- 環境変数 ANTHROPIC_API_KEY が設定されている
+
+**注意**: このテストは実際のClaude APIを呼び出すため、APIコストが発生します。手動実行を推奨します。
+
 **テスト手順**:
 ```python
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Real API call - run manually")
+@pytest.mark.manual  # 手動実行推奨
 async def test_cognitive_trait_aware_response(db_pool):
+    """Docker環境で実際のClaude APIを使用して認知特性配慮応答をテスト"""
     # 1. セットアップ
     sync_service = ClaudeMdSync(db_pool, "CLAUDE.md")
     await sync_service.sync()
-    
-    # 2. KanaAIBridge経由でClaude呼び出し
+
+    # 2. KanaAIBridge経由でClaude呼び出し（実際のAPI使用）
     from bridge.factory.bridge_factory import BridgeFactory
     bridge = await BridgeFactory.create_ai_bridge_with_memory(
         bridge_type="kana",
         pool=db_pool
     )
-    
+
     # 3. 選択肢を必要とする質問
     response = await bridge.process_intent({
         "content": "Memory Storeの実装方法を教えて",
         "user_id": "hiroki",
         "session_id": "test_session"
     })
-    
+
     # 4. 応答検証
     response_text = response.get("summary", "")
-    
+
     # 認知特性配慮チェック
     has_choices = any(keyword in response_text for keyword in ["選択肢", "方法1", "方法2", "案1", "案2"])
     has_structure = any(keyword in response_text for keyword in ["手順", "ステップ", "1.", "2.", "3."])
     has_negative = any(keyword in response_text for keyword in ["間違い", "ダメ", "やめて"])
-    
+
     # アサーション
     assert has_choices or has_structure, "選択肢または構造的な提示が必要"
     assert not has_negative, "否定表現が含まれている"
@@ -748,34 +748,38 @@ async def test_token_overhead_requirement(db_pool):
 
 **目的**: エラーハンドリングが適切に動作することを確認
 
+**前提条件**:
+- Docker環境のPostgreSQLが起動している
+
 **テスト手順**:
 ```python
 @pytest.mark.asyncio
-async def test_error_handling():
+async def test_error_handling(db_pool):
+    """Docker環境でエラーハンドリングをテスト"""
     # ケース1: CLAUDE.md not found
     parser = ClaudeMdParser("nonexistent.md")
     with pytest.raises(FileNotFoundError):
         parser.parse()
-    
-    # ケース2: プロフィール見つからない
-    repo = MagicMock()
-    repo.get_profile = AsyncMock(return_value=None)
+
+    # ケース2: プロフィール見つからない（実際のDB使用）
+    repo = UserProfileRepository(db_pool)
     provider = ProfileContextProvider(repo)
-    
+
     context = await provider.get_profile_context("unknown_user")
     assert context is None  # Noneを返す（エラーにしない）
-    
-    # ケース3: Context Assemblerでのフォールバック
-    assembler = await create_context_assembler()
-    
-    # Profile Providerがない状態でも動作
+
+    # ケース3: Context Assemblerでのフォールバック（実際のDB使用）
+    assembler = await create_context_assembler(pool=db_pool)
+
+    # Profile Providerがある状態で未知のユーザー
     assembled = await assembler.assemble_context(
         user_message="テスト",
-        user_id="hiroki"
+        user_id="unknown_user_12345"
     )
-    
+
     assert assembled is not None
     assert assembled.messages is not None
+    # プロフィールが見つからなくてもコンテキスト組み立ては成功する
 ```
 
 **期待結果**:

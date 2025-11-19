@@ -26,6 +26,13 @@ try:
 except ImportError:
     HAS_SESSION_SUMMARY = False
 
+# Sprint 8: User Profile support
+try:
+    from user_profile.context_provider import ProfileContextProvider
+    HAS_USER_PROFILE = True
+except ImportError:
+    HAS_USER_PROFILE = False
+
 
 class ContextAssemblerService:
     """
@@ -42,6 +49,7 @@ class ContextAssemblerService:
         session_repository: SessionRepository,
         config: ContextConfig,
         session_summary_repository: Optional['SessionSummaryRepository'] = None,
+        profile_context_provider: Optional['ProfileContextProvider'] = None,
     ):
         self.retrieval = retrieval_orchestrator
         self.message_repo = message_repository
@@ -50,6 +58,8 @@ class ContextAssemblerService:
         self.token_estimator = TokenEstimator()
         # Sprint 7: Session Summary Repository
         self.summary_repo = session_summary_repository
+        # Sprint 8: User Profile Context Provider
+        self.profile_provider = profile_context_provider
 
     async def assemble_context(
         self,
@@ -68,10 +78,26 @@ class ContextAssemblerService:
             options: 組み立てオプション
 
         Returns:
-            AssembledContext: メッセージリスト + メタデータ
+            AssembledContext: メッセージリスト + メタデータ + プロフィールコンテキスト
         """
         start_time = time.time()
         options = options or AssemblyOptions()
+
+        # 0. User Profile取得（Sprint 8）
+        profile_context = None
+        if options.include_user_profile and self.profile_provider:
+            try:
+                profile_context = await self.profile_provider.get_profile_context(
+                    user_id=user_id,
+                    include_family=options.include_family,
+                    include_goals=options.include_goals,
+                )
+                if profile_context:
+                    import logging
+                    logging.info(f"✅ Profile context loaded: {profile_context.token_count} tokens")
+            except Exception as e:
+                import logging
+                logging.warning(f"Failed to load profile context: {e}")
 
         # 1. メモリ階層を取得
         memory_layers = await self._fetch_memory_layers(
@@ -81,8 +107,8 @@ class ContextAssemblerService:
             options=options,
         )
 
-        # 2. メッセージリストを構築
-        messages = self._build_messages(memory_layers, user_message)
+        # 2. メッセージリストを構築（Profile統合）
+        messages = self._build_messages(memory_layers, user_message, profile_context)
 
         # 3. トークン数を推定
         total_tokens = self.token_estimator.estimate(messages)
@@ -91,7 +117,7 @@ class ContextAssemblerService:
         compression_applied = False
         if total_tokens > self._get_token_limit():
             messages, total_tokens = self._compress_context(
-                messages, memory_layers, user_message
+                messages, memory_layers, user_message, profile_context
             )
             compression_applied = True
 
@@ -100,7 +126,7 @@ class ContextAssemblerService:
 
         assembly_time = (time.time() - start_time) * 1000
 
-        # 6. メタデータ構築
+        # 6. メタデータ構築（Sprint 8: Profile情報追加）
         metadata = ContextMetadata(
             working_memory_count=len(memory_layers.get("working", [])),
             semantic_memory_count=len(memory_layers.get("semantic", [])),
@@ -109,9 +135,16 @@ class ContextAssemblerService:
             token_limit=self._get_token_limit(),
             compression_applied=compression_applied,
             assembly_latency_ms=assembly_time,
+            # Sprint 8: User Profile metadata
+            has_user_profile=profile_context is not None,
+            profile_token_count=profile_context.token_count if profile_context else 0,
         )
 
-        return AssembledContext(messages=messages, metadata=metadata)
+        return AssembledContext(
+            messages=messages,
+            metadata=metadata,
+            profile_context=profile_context,
+        )
 
     async def _fetch_memory_layers(
         self,
@@ -206,18 +239,34 @@ class ContextAssemblerService:
         return None
 
     def _build_messages(
-        self, memory_layers: Dict[str, Any], user_message: str
+        self,
+        memory_layers: Dict[str, Any],
+        user_message: str,
+        profile_context: Optional['ProfileContext'] = None,
     ) -> List[Dict[str, str]]:
-        """Claude APIに渡すメッセージリストを構築"""
+        """Claude APIに渡すメッセージリストを構築（Sprint 8: Profile統合）"""
         messages = []
 
-        # 1. System Prompt
-        system_content = self.config.system_prompt
+        # 1. System Prompt（Sprint 8: Profile統合）
+        system_parts = [self.config.system_prompt]
+
+        # Sprint 8: User Profile調整
+        if profile_context and profile_context.system_prompt_adjustment:
+            system_parts.append("\n")
+            system_parts.append(profile_context.system_prompt_adjustment)
+
+        # Sprint 8: User Profile コンテキストセクション
+        if profile_context and profile_context.context_section:
+            system_parts.append("\n")
+            system_parts.append(profile_context.context_section)
+
+        # Session Summary
         if memory_layers.get("session_summary"):
-            system_content += (
+            system_parts.append(
                 f"\n\n## セッション要約\n{memory_layers['session_summary']}"
             )
 
+        system_content = "".join(system_parts)
         messages.append({"role": "system", "content": system_content})
 
         # 2. Semantic Memory
@@ -258,14 +307,15 @@ class ContextAssemblerService:
         messages: List[Dict[str, str]],
         memory_layers: Dict[str, Any],
         user_message: str,
+        profile_context: Optional['ProfileContext'] = None,
     ) -> Tuple[List[Dict[str, str]], int]:
-        """トークン上限を超えた場合にコンテキストを圧縮"""
+        """トークン上限を超えた場合にコンテキストを圧縮（Sprint 8: Profile考慮）"""
         compressed_layers = memory_layers.copy()
 
         # Phase 1: Session Summary削除
         if compressed_layers.get("session_summary"):
             compressed_layers["session_summary"] = None
-            messages = self._build_messages(compressed_layers, user_message)
+            messages = self._build_messages(compressed_layers, user_message, profile_context)
             tokens = self.token_estimator.estimate(messages)
             if tokens <= self._get_token_limit():
                 return messages, tokens
@@ -275,7 +325,7 @@ class ContextAssemblerService:
         while len(semantic) > 1:
             semantic = semantic[:-1]  # 最後（類似度が低い）から削除
             compressed_layers["semantic"] = semantic
-            messages = self._build_messages(compressed_layers, user_message)
+            messages = self._build_messages(compressed_layers, user_message, profile_context)
             tokens = self.token_estimator.estimate(messages)
             if tokens <= self._get_token_limit():
                 return messages, tokens
@@ -285,12 +335,13 @@ class ContextAssemblerService:
         while len(working) > 2:  # 最低2件は残す
             working = working[1:]  # 最初（古い）から削除
             compressed_layers["working"] = working
-            messages = self._build_messages(compressed_layers, user_message)
+            messages = self._build_messages(compressed_layers, user_message, profile_context)
             tokens = self.token_estimator.estimate(messages)
             if tokens <= self._get_token_limit():
                 return messages, tokens
 
         # それでも超過する場合は現状を返す
+        # Note: User Profileは削除しない（認知特性への配慮は必須）
         return messages, tokens
 
     def _get_token_limit(self) -> int:

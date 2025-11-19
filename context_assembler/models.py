@@ -1,10 +1,14 @@
 """Context Assembler - Data Models"""
 
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+# Sprint 8: User Profile support
+if TYPE_CHECKING:
+    from user_profile.context_provider import ProfileContext
 
 
 class MemoryLayer(str, Enum):
@@ -36,6 +40,10 @@ class AssemblyOptions(BaseModel):
     semantic_memory_limit: Optional[int] = None
     include_semantic_memory: bool = True
     include_session_summary: bool = True
+    # Sprint 8: User Profile support
+    include_user_profile: bool = True
+    include_family: bool = True
+    include_goals: bool = True
 
 
 class ContextMetadata(BaseModel):
@@ -48,6 +56,9 @@ class ContextMetadata(BaseModel):
     token_limit: int = Field(..., ge=0)
     compression_applied: bool
     assembly_latency_ms: float = Field(..., ge=0)
+    # Sprint 8: User Profile support
+    has_user_profile: bool = False
+    profile_token_count: int = Field(default=0, ge=0)
 
 
 class AssembledContext(BaseModel):
@@ -55,6 +66,8 @@ class AssembledContext(BaseModel):
 
     messages: List[Dict[str, str]]
     metadata: ContextMetadata
+    # Sprint 8: User Profile support
+    profile_context: Optional['ProfileContext'] = None
 
     class Config:
         from_attributes = True

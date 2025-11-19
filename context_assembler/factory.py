@@ -69,15 +69,18 @@ async def create_context_assembler(
 
     # 2. リポジトリ初期化
     try:
-        from memory_store.repository import MessageRepository, MemoryRepository
+        from backend.app.repositories.message_repo import MessageRepository
+        from memory_store.repository import MemoryRepository
+        from bridge.memory.repositories import SessionRepository
     except ImportError as e:
         raise ImportError(
-            "Memory Store repositories not found. "
-            "Please implement memory_store/repository.py or use Mock."
+            "Required repositories not found. "
+            "Please implement repositories or use Mock."
         ) from e
 
     message_repo = MessageRepository(pool)
     memory_repo = MemoryRepository(pool)
+    session_repo = SessionRepository(pool)
 
     # 3. Retrieval Orchestrator初期化
     try:
@@ -90,9 +93,36 @@ async def create_context_assembler(
 
     retrieval = RetrievalOrchestrator(memory_repo=memory_repo)
 
-    # 4. Context Assembler初期化
+    # 4. Sprint 7: Session Summary Repository初期化
+    session_summary_repo = None
+    try:
+        from memory_store.session_summary_repository import SessionSummaryRepository
+        session_summary_repo = SessionSummaryRepository(pool)
+        import logging
+        logging.info("✅ Session Summary Repository initialized")
+    except ImportError:
+        import logging
+        logging.warning("Session Summary Repository not available")
+
+    # 5. Sprint 8: User Profile Context Provider初期化
+    profile_provider = None
+    try:
+        from user_profile.repository import UserProfileRepository
+        from user_profile.context_provider import ProfileContextProvider
+        profile_repo = UserProfileRepository(pool)
+        profile_provider = ProfileContextProvider(profile_repo)
+        import logging
+        logging.info("✅ User Profile Context Provider initialized")
+    except ImportError as e:
+        import logging
+        logging.warning(f"User Profile Context Provider not available: {e}")
+
+    # 6. Context Assembler初期化
     return ContextAssemblerService(
-        message_repo=message_repo,
-        retrieval=retrieval,
+        retrieval_orchestrator=retrieval,
+        message_repository=message_repo,
+        session_repository=session_repo,
         config=config or get_default_config(),
+        session_summary_repository=session_summary_repo,
+        profile_context_provider=profile_provider,
     )

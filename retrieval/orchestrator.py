@@ -72,6 +72,7 @@ class RetrievalOrchestrator:
         multi_search_executor: MultiSearchExecutor,
         reranker: Reranker,
         metrics_collector: MetricsCollector,
+        scorer: Optional["ImportanceScorer"] = None,  # Sprint 9: Memory Lifecycle
     ):
         """
         Args:
@@ -80,12 +81,14 @@ class RetrievalOrchestrator:
             multi_search_executor: 複数検索実行サービス
             reranker: リランキングサービス
             metrics_collector: メトリクス収集サービス
+            scorer: 重要度スコアラー (Sprint 9)
         """
         self.query_analyzer = query_analyzer
         self.strategy_selector = strategy_selector
         self.multi_search_executor = multi_search_executor
         self.reranker = reranker
         self.metrics_collector = metrics_collector
+        self.scorer = scorer  # Sprint 9: Memory Lifecycle
 
     async def retrieve(
         self, query: str, options: Optional[RetrievalOptions] = None
@@ -181,9 +184,22 @@ class RetrievalOrchestrator:
         Returns:
             RetrievalResponse: 検索結果 + メタデータ
         """
-        # TODO: コンテキストを考慮した検索の実装
-        # 現状は基本的なretrieveを呼び出す
-        return await self.retrieve(query, options)
+        # 基本的な検索を実行
+        response = await self.retrieve(query, options)
+
+        # Sprint 9: アクセスブーストを適用
+        if self.scorer:
+            import logging
+            logger = logging.getLogger(__name__)
+            for result in response.results:
+                try:
+                    # メモリIDを取得してアクセスブーストを適用
+                    memory_id = str(result.id)
+                    await self.scorer.boost_on_access(memory_id)
+                except Exception as e:
+                    logger.warning(f"Failed to boost memory {result.id}: {e}")
+
+        return response
 
     def get_metrics_summary(self) -> Dict:
         """

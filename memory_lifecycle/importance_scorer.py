@@ -5,7 +5,7 @@ Importance Scorer - メモリ重要度スコアリング
 """
 
 import asyncpg
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import logging
 
@@ -40,7 +40,13 @@ class ImportanceScorer:
         Returns:
             float: 減衰係数（0.0 - 1.0）
         """
-        weeks_elapsed = (datetime.utcnow() - created_at).days / 7.0
+        # timezone-aware datetimeに対応
+        now = datetime.now(timezone.utc)
+        if created_at.tzinfo is None:
+            # naive datetimeの場合はUTCとして扱う
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        
+        weeks_elapsed = (now - created_at).days / 7.0
         decay_factor = self.DECAY_RATE ** weeks_elapsed
         return decay_factor
 

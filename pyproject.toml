@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "resonant-engine"
+version = "0.1.0"
+description = "Resonant Engine - Human-AI Co-Intelligence Architecture"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools]
+packages = ["memory_lifecycle", "user_profile", "context_assembler", "session", "summarization", "retrieval", "memory_store", "bridge", "message_bridge", "intent_bridge"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+markers = [
+    "slow: Marks tests as Sprint 2 performance validations that may take longer to run"
+]

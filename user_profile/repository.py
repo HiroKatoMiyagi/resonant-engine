@@ -9,7 +9,6 @@ import asyncpg
 from typing import Optional, List
 from datetime import datetime
 import logging
-import json
 
 from .models import (
     UserProfile,
@@ -137,7 +136,7 @@ class UserProfileRepository:
                 """
                 INSERT INTO cognitive_traits
                     (user_id, trait_type, trait_name, description, importance_level, handling_strategy)
-                VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING *
             """,
                 trait.user_id,
@@ -145,7 +144,7 @@ class UserProfileRepository:
                 trait.trait_name,
                 trait.description,
                 trait.importance_level,
-                json.dumps(trait.handling_strategy) if trait.handling_strategy else None,
+                trait.handling_strategy,
             )
 
             return CognitiveTrait(**dict(row))
@@ -225,14 +224,14 @@ class UserProfileRepository:
                 """
                 INSERT INTO resonant_concepts
                     (user_id, concept_type, concept_name, definition, parameters, importance_level)
-                VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING *
             """,
                 concept.user_id,
                 concept.concept_type,
                 concept.concept_name,
                 concept.definition,
-                json.dumps(concept.parameters) if concept.parameters else None,
+                concept.parameters,
                 concept.importance_level,
             )
 

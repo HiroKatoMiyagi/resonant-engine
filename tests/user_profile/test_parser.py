@@ -12,7 +12,7 @@ from user_profile.claude_md_parser import ClaudeMdParser
 
 def test_parse_basic_profile():
     """基本プロフィール抽出テスト"""
-    parser = ClaudeMdParser("/home/user/resonant-engine/CLAUDE.md")
+    parser = ClaudeMdParser("CLAUDE.md")
     parsed = parser.parse()
 
     assert parsed.profile["user_id"] == "hiroki"
@@ -23,7 +23,7 @@ def test_parse_basic_profile():
 
 def test_parse_cognitive_traits():
     """認知特性抽出テスト"""
-    parser = ClaudeMdParser("/home/user/resonant-engine/CLAUDE.md")
+    parser = ClaudeMdParser("CLAUDE.md")
     parsed = parser.parse()
 
     assert len(parsed.cognitive_traits) >= 4
@@ -35,7 +35,7 @@ def test_parse_cognitive_traits():
 
 def test_parse_family_members():
     """家族情報抽出テスト"""
-    parser = ClaudeMdParser("/home/user/resonant-engine/CLAUDE.md")
+    parser = ClaudeMdParser("CLAUDE.md")
     parsed = parser.parse()
 
     assert len(parsed.family_members) >= 5
@@ -49,7 +49,7 @@ def test_parse_family_members():
 
 def test_parse_goals():
     """目標抽出テスト"""
-    parser = ClaudeMdParser("/home/user/resonant-engine/CLAUDE.md")
+    parser = ClaudeMdParser("CLAUDE.md")
     parsed = parser.parse()
 
     assert len(parsed.goals) >= 3
@@ -61,7 +61,7 @@ def test_parse_goals():
 
 def test_parse_resonant_concepts():
     """Resonant概念抽出テスト"""
-    parser = ClaudeMdParser("/home/user/resonant-engine/CLAUDE.md")
+    parser = ClaudeMdParser("CLAUDE.md")
     parsed = parser.parse()
 
     assert len(parsed.resonant_concepts) >= 3

@@ -9,6 +9,7 @@ import asyncpg
 from typing import Optional, List
 from datetime import datetime
 import logging
+import json
 
 from .models import (
     UserProfile,
@@ -56,7 +57,12 @@ class UserProfileRepository:
                 "SELECT * FROM cognitive_traits WHERE user_id = $1 ORDER BY importance_level DESC",
                 user_id,
             )
-            cognitive_traits = [CognitiveTrait(**dict(row)) for row in trait_rows]
+            cognitive_traits = []
+            for row in trait_rows:
+                trait_dict = dict(row)
+                if trait_dict.get('handling_strategy') and isinstance(trait_dict['handling_strategy'], str):
+                    trait_dict['handling_strategy'] = json.loads(trait_dict['handling_strategy'])
+                cognitive_traits.append(CognitiveTrait(**trait_dict))
 
             # 家族情報
             family_rows = await conn.fetch(
@@ -76,7 +82,12 @@ class UserProfileRepository:
                 "SELECT * FROM resonant_concepts WHERE user_id = $1 ORDER BY importance_level DESC",
                 user_id,
             )
-            resonant_concepts = [ResonantConcept(**dict(row)) for row in concept_rows]
+            resonant_concepts = []
+            for row in concept_rows:
+                concept_dict = dict(row)
+                if concept_dict.get('parameters') and isinstance(concept_dict['parameters'], str):
+                    concept_dict['parameters'] = json.loads(concept_dict['parameters'])
+                resonant_concepts.append(ResonantConcept(**concept_dict))
 
             return UserProfileData(
                 profile=profile,
@@ -136,7 +147,7 @@ class UserProfileRepository:
                 """
                 INSERT INTO cognitive_traits
                     (user_id, trait_type, trait_name, description, importance_level, handling_strategy)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                VALUES ($1, $2, $3, $4, $5, $6::jsonb)
                 RETURNING *
             """,
                 trait.user_id,
@@ -144,10 +155,13 @@ class UserProfileRepository:
                 trait.trait_name,
                 trait.description,
                 trait.importance_level,
-                trait.handling_strategy,
+                json.dumps(trait.handling_strategy) if trait.handling_strategy else None,
             )
 
-            return CognitiveTrait(**dict(row))
+            trait_dict = dict(row)
+            if trait_dict.get('handling_strategy') and isinstance(trait_dict['handling_strategy'], str):
+                trait_dict['handling_strategy'] = json.loads(trait_dict['handling_strategy'])
+            return CognitiveTrait(**trait_dict)
 
     async def add_family_member(self, member: FamilyMember) -> FamilyMember:
         """
@@ -224,18 +238,21 @@ class UserProfileRepository:
                 """
                 INSERT INTO resonant_concepts
                     (user_id, concept_type, concept_name, definition, parameters, importance_level)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                VALUES ($1, $2, $3, $4, $5::jsonb, $6)
                 RETURNING *
             """,
                 concept.user_id,
                 concept.concept_type,
                 concept.concept_name,
                 concept.definition,
-                concept.parameters,
+                json.dumps(concept.parameters) if concept.parameters else None,
                 concept.importance_level,
             )
 
-            return ResonantConcept(**dict(row))
+            concept_dict = dict(row)
+            if concept_dict.get('parameters') and isinstance(concept_dict['parameters'], str):
+                concept_dict['parameters'] = json.loads(concept_dict['parameters'])
+            return ResonantConcept(**concept_dict)
 
     async def update_last_sync(self, user_id: str) -> None:
         """

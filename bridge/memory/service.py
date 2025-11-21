@@ -336,7 +336,13 @@ class MemoryManagementService:
         Returns:
             The created choice point
         """
+        # Get session to retrieve user_id
+        session = await self.session_repo.get_by_id(session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+
         choice_point = ChoicePoint(
+            user_id=session.user_id,
             session_id=session_id,
             intent_id=intent_id,
             question=question,

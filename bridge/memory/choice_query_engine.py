@@ -234,6 +234,10 @@ class ChoiceQueryEngine:
         # Parse choices JSONB if it's a string
         if 'choices' in row_dict and isinstance(row_dict['choices'], str):
             row_dict['choices'] = json.loads(row_dict['choices'])
+        
+        # Parse metadata JSONB if it's a string
+        if 'metadata' in row_dict and isinstance(row_dict['metadata'], str):
+            row_dict['metadata'] = json.loads(row_dict['metadata'])
 
         # Convert choice dicts to Choice objects
         if 'choices' in row_dict and isinstance(row_dict['choices'], list):

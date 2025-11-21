@@ -5,6 +5,8 @@ Tests for automatic past choice injection into context assembly.
 """
 
 import pytest
+import sys
+print(f"DEBUG SYS.PATH: {sys.path}")
 from datetime import datetime, timezone
 from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock, patch

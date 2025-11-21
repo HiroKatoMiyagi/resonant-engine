@@ -58,7 +58,7 @@ class SessionModel(Base):
     started_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     last_active = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     status = Column(String(50), nullable=False, default="active", index=True)
-    metadata = Column(JSONB, default=dict)
+    meta_info = Column("metadata", JSONB, default=dict)
 
     __table_args__ = (
         CheckConstraint(
@@ -96,7 +96,7 @@ class IntentModel(Base):
     status = Column(String(50), nullable=False, default="pending")
     outcome = Column(JSONB, nullable=True)
 
-    metadata = Column(JSONB, default=dict)
+    meta_info = Column("metadata", JSONB, default=dict)
 
     __table_args__ = (
         CheckConstraint(
@@ -136,7 +136,7 @@ class ResonanceModel(Base):
     duration_ms = Column(Integer, nullable=True)
 
     pattern_type = Column(String(100), nullable=True)
-    metadata = Column(JSONB, default=dict)
+    meta_info = Column("metadata", JSONB, default=dict)
 
     __table_args__ = (
         CheckConstraint("intensity >= 0 AND intensity <= 1", name="valid_intensity"),
@@ -166,7 +166,7 @@ class AgentContextModel(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     superseded_by = Column(UUID(as_uuid=True), ForeignKey("agent_contexts.id", ondelete="SET NULL"), nullable=True)
 
-    metadata = Column(JSONB, default=dict)
+    meta_info = Column("metadata", JSONB, default=dict)
 
     __table_args__ = (
         CheckConstraint(
@@ -200,12 +200,20 @@ class ChoicePointModel(Base):
     decided_at = Column(DateTime(timezone=True), nullable=True)
 
     decision_rationale = Column(Text, nullable=True)
-    metadata = Column(JSONB, default=dict)
+    meta_info = Column("metadata", JSONB, default=dict)
+    
+    # Sprint 10 extensions
+    user_id = Column(String(255), nullable=False)
+    tags = Column(ARRAY(Text), default=list)
+    context_type = Column(String(50), default="general")
 
     __table_args__ = (
         Index("idx_choice_points_session_id", "session_id"),
         Index("idx_choice_points_intent_id", "intent_id"),
         Index("idx_choice_points_created_at", "created_at"),
+        Index("idx_choice_points_user_id", "user_id"),
+        Index("idx_choice_points_tags", "tags", postgresql_using="gin"),
+        Index("idx_choice_points_context_type", "context_type"),
     )
 
     # Relationships

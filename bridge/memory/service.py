@@ -386,6 +386,95 @@ class MemoryManagementService:
         return await self.choice_point_repo.list_by_session(session_id)
 
     # ========================================================================
+    # Sprint 10: Enhanced Choice Point Methods
+    # ========================================================================
+
+    async def create_choice_point_enhanced(
+        self,
+        user_id: str,
+        session_id: UUID,
+        intent_id: UUID,
+        question: str,
+        choices: List[Choice],
+        tags: Optional[List[str]] = None,
+        context_type: str = "general",
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> ChoicePoint:
+        """
+        Create an enhanced choice point with Sprint 10 features.
+
+        Args:
+            user_id: User identifier (Sprint 10)
+            session_id: The session ID
+            intent_id: The related intent
+            question: The question requiring a choice
+            choices: List of available choices
+            tags: Categorization tags (Sprint 10)
+            context_type: Context classification (Sprint 10)
+            metadata: Optional metadata
+
+        Returns:
+            The created choice point
+        """
+        choice_point = ChoicePoint(
+            user_id=user_id,
+            session_id=session_id,
+            intent_id=intent_id,
+            question=question,
+            choices=choices,
+            tags=tags or [],
+            context_type=context_type,
+            metadata=metadata or {},
+        )
+        return await self.choice_point_repo.create(choice_point)
+
+    async def decide_choice_enhanced(
+        self,
+        choice_point_id: UUID,
+        selected_choice_id: str,
+        rationale: str,
+        rejection_reasons: Optional[Dict[str, str]] = None
+    ) -> ChoicePoint:
+        """
+        Record a decision with rejection reasons for unselected choices (Sprint 10).
+
+        Args:
+            choice_point_id: The choice point ID
+            selected_choice_id: The ID of the selected choice
+            rationale: The reasoning behind the decision
+            rejection_reasons: Dict mapping choice_id to rejection reason
+
+        Returns:
+            The updated choice point with rejection reasons
+        """
+        choice_point = await self.choice_point_repo.get_by_id(choice_point_id)
+        if not choice_point:
+            raise ValueError(f"ChoicePoint {choice_point_id} not found")
+
+        # Validate that the selected choice exists
+        valid_ids = [c.id for c in choice_point.choices]
+        if selected_choice_id not in valid_ids:
+            raise ValueError(f"Invalid choice ID: {selected_choice_id}")
+
+        # Update each choice with selection status and rejection reason
+        updated_choices = []
+        for choice in choice_point.choices:
+            choice.selected = (choice.id == selected_choice_id)
+            if choice.selected:
+                choice.rejection_reason = None
+            else:
+                choice.rejection_reason = rejection_reasons.get(choice.id, "") if rejection_reasons else ""
+            choice.evaluated_at = datetime.now(timezone.utc)
+            updated_choices.append(choice)
+
+        choice_point.choices = updated_choices
+        choice_point.selected_choice_id = selected_choice_id
+        choice_point.decided_at = datetime.now(timezone.utc)
+        choice_point.decision_rationale = rationale
+
+        return await self.choice_point_repo.update(choice_point)
+
+    # ========================================================================
     # Agent Context Management (Breathing Phase 4: Re-reflection)
     # ========================================================================
 

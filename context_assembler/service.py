@@ -33,6 +33,13 @@ try:
 except ImportError:
     HAS_USER_PROFILE = False
 
+# Sprint 10: Choice Preservation support
+try:
+    from bridge.memory.choice_query_engine import ChoiceQueryEngine
+    HAS_CHOICE_QUERY = True
+except ImportError:
+    HAS_CHOICE_QUERY = False
+
 
 class ContextAssemblerService:
     """
@@ -50,6 +57,7 @@ class ContextAssemblerService:
         config: ContextConfig,
         session_summary_repository: Optional['SessionSummaryRepository'] = None,
         profile_context_provider: Optional['ProfileContextProvider'] = None,
+        choice_query_engine: Optional['ChoiceQueryEngine'] = None,
     ):
         self.retrieval = retrieval_orchestrator
         self.message_repo = message_repository
@@ -60,6 +68,8 @@ class ContextAssemblerService:
         self.summary_repo = session_summary_repository
         # Sprint 8: User Profile Context Provider
         self.profile_provider = profile_context_provider
+        # Sprint 10: Choice Query Engine
+        self.choice_query_engine = choice_query_engine
 
     async def assemble_context(
         self,
@@ -126,7 +136,7 @@ class ContextAssemblerService:
 
         assembly_time = (time.time() - start_time) * 1000
 
-        # 6. メタデータ構築（Sprint 8: Profile情報追加）
+        # 6. メタデータ構築（Sprint 8: Profile情報追加、Sprint 10: Choice追加）
         metadata = ContextMetadata(
             working_memory_count=len(memory_layers.get("working", [])),
             semantic_memory_count=len(memory_layers.get("semantic", [])),
@@ -138,6 +148,8 @@ class ContextAssemblerService:
             # Sprint 8: User Profile metadata
             has_user_profile=profile_context is not None,
             profile_token_count=profile_context.token_count if profile_context else 0,
+            # Sprint 10: Choice Preservation metadata
+            past_choices_count=len(memory_layers.get("past_choices", [])),
         )
 
         return AssembledContext(
@@ -189,13 +201,23 @@ class ContextAssemblerService:
                 return None
             tasks.append(empty_summary())
 
+        # Sprint 10: Past Choices
+        if options.include_past_choices:
+            tasks.append(self._fetch_past_choices(user_id, user_message, options.past_choices_limit))
+        else:
+            # ダミータスク（空リストを返す）
+            async def empty_choices():
+                return []
+            tasks.append(empty_choices())
+
         # 並行実行
-        working, semantic, summary = await asyncio.gather(*tasks)
+        working, semantic, summary, past_choices = await asyncio.gather(*tasks)
 
         return {
             "working": working,
             "semantic": semantic,
             "session_summary": summary,
+            "past_choices": past_choices,
         }
 
     async def _fetch_working_memory(
@@ -238,6 +260,28 @@ class ContextAssemblerService:
             return session.metadata.get("summary")
         return None
 
+    async def _fetch_past_choices(self, user_id: str, current_question: str, limit: int) -> List:
+        """
+        Past Choices: 過去の選択履歴を取得（Sprint 10）
+
+        現在の質問に関連する過去の選択を取得して、
+        コンテキストに含めることで一貫した意思決定を支援します。
+        """
+        if not self.choice_query_engine:
+            return []
+
+        try:
+            past_choices = await self.choice_query_engine.get_relevant_choices_for_context(
+                user_id=user_id,
+                current_question=current_question,
+                limit=limit
+            )
+            return past_choices
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to fetch past choices: {e}")
+            return []
+
     def _build_messages(
         self,
         memory_layers: Dict[str, Any],
@@ -265,6 +309,31 @@ class ContextAssemblerService:
             system_parts.append(
                 f"\n\n## セッション要約\n{memory_layers['session_summary']}"
             )
+
+        # Sprint 10: Past Decision History
+        past_choices = memory_layers.get("past_choices", [])
+        if past_choices:
+            system_parts.append("\n\n## 過去の意思決定履歴\n")
+            system_parts.append("以下は、あなたが過去に行った類似の意思決定です。一貫性を保つために参考にしてください。\n\n")
+            for i, cp in enumerate(past_choices, 1):
+                # 選択された選択肢
+                selected_choice = next((c for c in cp.choices if c.id == cp.selected_choice_id), None)
+                if selected_choice:
+                    system_parts.append(f"{i}. **{cp.question}**\n")
+                    system_parts.append(f"   - 選択: {selected_choice.description}\n")
+                    if cp.decision_rationale:
+                        system_parts.append(f"   - 理由: {cp.decision_rationale}\n")
+
+                    # 却下された選択肢（理由がある場合）
+                    rejected_choices = [c for c in cp.choices if c.id != cp.selected_choice_id and c.rejection_reason]
+                    if rejected_choices:
+                        system_parts.append("   - 却下した選択肢:\n")
+                        for rc in rejected_choices:
+                            system_parts.append(f"     • {rc.description}: {rc.rejection_reason}\n")
+
+                    if cp.decided_at:
+                        system_parts.append(f"   - 決定日: {cp.decided_at.strftime('%Y-%m-%d')}\n")
+                    system_parts.append("\n")
 
         system_content = "".join(system_parts)
         messages.append({"role": "system", "content": system_content})
@@ -309,7 +378,7 @@ class ContextAssemblerService:
         user_message: str,
         profile_context: Optional['ProfileContext'] = None,
     ) -> Tuple[List[Dict[str, str]], int]:
-        """トークン上限を超えた場合にコンテキストを圧縮（Sprint 8: Profile考慮）"""
+        """トークン上限を超えた場合にコンテキストを圧縮（Sprint 8: Profile考慮、Sprint 10: Choice考慮）"""
         compressed_layers = memory_layers.copy()
 
         # Phase 1: Session Summary削除
@@ -320,7 +389,17 @@ class ContextAssemblerService:
             if tokens <= self._get_token_limit():
                 return messages, tokens
 
-        # Phase 2: Semantic Memory削減
+        # Phase 2: Past Choices削減（Sprint 10）
+        past_choices = compressed_layers.get("past_choices", [])
+        while len(past_choices) > 1:
+            past_choices = past_choices[:-1]  # 最後（関連度が低い）から削除
+            compressed_layers["past_choices"] = past_choices
+            messages = self._build_messages(compressed_layers, user_message, profile_context)
+            tokens = self.token_estimator.estimate(messages)
+            if tokens <= self._get_token_limit():
+                return messages, tokens
+
+        # Phase 3: Semantic Memory削減
         semantic = compressed_layers.get("semantic", [])
         while len(semantic) > 1:
             semantic = semantic[:-1]  # 最後（類似度が低い）から削除
@@ -330,7 +409,7 @@ class ContextAssemblerService:
             if tokens <= self._get_token_limit():
                 return messages, tokens
 
-        # Phase 3: Working Memory削減
+        # Phase 4: Working Memory削減
         working = compressed_layers.get("working", [])
         while len(working) > 2:  # 最低2件は残す
             working = working[1:]  # 最初（古い）から削除

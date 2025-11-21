@@ -44,6 +44,9 @@ class AssemblyOptions(BaseModel):
     include_user_profile: bool = True
     include_family: bool = True
     include_goals: bool = True
+    # Sprint 10: Choice Preservation support
+    include_past_choices: bool = True
+    past_choices_limit: int = Field(default=3, ge=1, le=10)
 
 
 class ContextMetadata(BaseModel):
@@ -59,6 +62,8 @@ class ContextMetadata(BaseModel):
     # Sprint 8: User Profile support
     has_user_profile: bool = False
     profile_token_count: int = Field(default=0, ge=0)
+    # Sprint 10: Choice Preservation support
+    past_choices_count: int = Field(default=0, ge=0)
 
 
 class AssembledContext(BaseModel):

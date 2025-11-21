@@ -172,10 +172,16 @@ class AllContextsResponse(BaseModel):
 
 
 class ChoiceSchema(BaseModel):
-    """Schema for a single choice"""
+    """Schema for a single choice (Sprint 10 Enhanced)"""
     id: str
     description: str
     implications: Dict[str, Any] = Field(default_factory=dict)
+
+    # Sprint 10 additions
+    selected: bool = False
+    evaluation_score: Optional[float] = None
+    rejection_reason: Optional[str] = None
+    evaluated_at: Optional[datetime] = None
 
 
 class CreateChoicePointRequest(BaseModel):
@@ -215,6 +221,68 @@ class ListChoicePointsResponse(BaseModel):
     """Response containing list of choice points"""
     choice_points: List[ChoicePointResponse]
     total: int
+
+
+# ============================================================================
+# Sprint 10: Enhanced Choice Point Schemas
+# ============================================================================
+
+
+class CreateChoicePointEnhancedRequest(BaseModel):
+    """Request to create an enhanced choice point (Sprint 10)"""
+    user_id: str
+    session_id: UUID
+    intent_id: UUID
+    question: str
+    choices: List[ChoiceSchema]
+    tags: List[str] = Field(default_factory=list, max_length=10)
+    context_type: str = "general"
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class DecideChoiceEnhancedRequest(BaseModel):
+    """Request to decide with rejection reasons (Sprint 10)"""
+    selected_choice_id: str
+    decision_rationale: str
+    rejection_reasons: Dict[str, str] = Field(default_factory=dict)
+
+
+class SearchChoicePointsRequest(BaseModel):
+    """Request to search choice points (Sprint 10)"""
+    user_id: str
+    tags: Optional[List[str]] = None
+    from_date: Optional[datetime] = None
+    to_date: Optional[datetime] = None
+    search_text: Optional[str] = None
+    limit: int = Field(default=10, ge=1, le=100)
+
+
+class ChoicePointEnhancedResponse(BaseModel):
+    """Enhanced response containing choice point with Sprint 10 fields"""
+    choice_point_id: UUID
+    user_id: str
+    session_id: UUID
+    intent_id: UUID
+    question: str
+    choices: List[ChoiceSchema]
+    selected_choice_id: Optional[str]
+    tags: List[str]
+    context_type: str
+    created_at: datetime
+    decided_at: Optional[datetime]
+    decision_rationale: Optional[str]
+    status: str = "pending"
+
+    @property
+    def computed_status(self) -> str:
+        return "decided" if self.selected_choice_id else "pending"
+
+
+class SearchChoicePointsResponse(BaseModel):
+    """Response for choice point search (Sprint 10)"""
+    results: List[ChoicePointEnhancedResponse]
+    count: int
+    query: Dict[str, Any]
 
 
 # ============================================================================

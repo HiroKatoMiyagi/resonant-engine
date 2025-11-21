@@ -47,6 +47,11 @@ from bridge.memory.api_schemas import (
     SnapshotResponse,
     StartCycleRequest,
     ContinueSessionResponse,
+    # Sprint 10 additions
+    CreateChoicePointEnhancedRequest,
+    DecideChoiceEnhancedRequest,
+    ChoicePointEnhancedResponse,
+    SearchChoicePointsResponse,
 )
 from bridge.memory.models import (
     AgentType,
@@ -528,6 +533,152 @@ async def get_pending_choices(
             for cp in cps
         ],
         total=len(cps),
+    )
+
+
+# ============================================================================
+# Sprint 10: Enhanced Choice Point Endpoints
+# ============================================================================
+
+
+@router.post("/choice-points/enhanced", response_model=ChoicePointEnhancedResponse)
+async def create_choice_point_enhanced(
+    request: CreateChoicePointEnhancedRequest,
+    service: MemoryManagementService = Depends(get_memory_service)
+):
+    """Create an enhanced choice point with Sprint 10 features"""
+    from bridge.memory.api_schemas import CreateChoicePointEnhancedRequest, ChoicePointEnhancedResponse
+
+    choices = [
+        Choice(
+            id=c.id,
+            description=c.description,
+            implications=c.implications,
+            selected=c.selected,
+            evaluation_score=c.evaluation_score,
+            rejection_reason=c.rejection_reason,
+            evaluated_at=c.evaluated_at
+        )
+        for c in request.choices
+    ]
+
+    cp = await service.create_choice_point_enhanced(
+        user_id=request.user_id,
+        session_id=request.session_id,
+        intent_id=request.intent_id,
+        question=request.question,
+        choices=choices,
+        tags=request.tags,
+        context_type=request.context_type,
+        metadata=request.metadata,
+    )
+
+    return ChoicePointEnhancedResponse(
+        choice_point_id=cp.id,
+        user_id=cp.user_id,
+        session_id=cp.session_id,
+        intent_id=cp.intent_id,
+        question=cp.question,
+        choices=[
+            {
+                "id": c.id,
+                "description": c.description,
+                "implications": c.implications,
+                "selected": c.selected,
+                "evaluation_score": c.evaluation_score,
+                "rejection_reason": c.rejection_reason,
+                "evaluated_at": c.evaluated_at
+            }
+            for c in cp.choices
+        ],
+        selected_choice_id=cp.selected_choice_id,
+        tags=cp.tags,
+        context_type=cp.context_type,
+        created_at=cp.created_at,
+        decided_at=cp.decided_at,
+        decision_rationale=cp.decision_rationale,
+    )
+
+
+@router.put("/choice-points/{choice_point_id}/decide/enhanced", response_model=ChoicePointEnhancedResponse)
+async def decide_choice_enhanced(
+    choice_point_id: UUID,
+    request: DecideChoiceEnhancedRequest,
+    service: MemoryManagementService = Depends(get_memory_service)
+):
+    """Decide on a choice point with rejection reasons (Sprint 10)"""
+    from bridge.memory.api_schemas import DecideChoiceEnhancedRequest, ChoicePointEnhancedResponse
+
+    cp = await service.decide_choice_enhanced(
+        choice_point_id=choice_point_id,
+        selected_choice_id=request.selected_choice_id,
+        rationale=request.decision_rationale,
+        rejection_reasons=request.rejection_reasons,
+    )
+
+    return ChoicePointEnhancedResponse(
+        choice_point_id=cp.id,
+        user_id=cp.user_id,
+        session_id=cp.session_id,
+        intent_id=cp.intent_id,
+        question=cp.question,
+        choices=[
+            {
+                "id": c.id,
+                "description": c.description,
+                "implications": c.implications,
+                "selected": c.selected,
+                "evaluation_score": c.evaluation_score,
+                "rejection_reason": c.rejection_reason,
+                "evaluated_at": c.evaluated_at
+            }
+            for c in cp.choices
+        ],
+        selected_choice_id=cp.selected_choice_id,
+        tags=cp.tags,
+        context_type=cp.context_type,
+        created_at=cp.created_at,
+        decided_at=cp.decided_at,
+        decision_rationale=cp.decision_rationale,
+    )
+
+
+@router.get("/choice-points/search", response_model=SearchChoicePointsResponse)
+async def search_choice_points(
+    user_id: str = Query(...),
+    tags: Optional[str] = Query(None),  # Comma-separated tags
+    from_date: Optional[str] = Query(None),  # ISO8601 format
+    to_date: Optional[str] = Query(None),
+    search_text: Optional[str] = Query(None),
+    limit: int = Query(10, ge=1, le=100),
+    service: MemoryManagementService = Depends(get_memory_service)
+):
+    """Search choice points by tags, time range, or full-text (Sprint 10)
+
+    Query Parameters:
+    - user_id: User ID (required)
+    - tags: Comma-separated tags (e.g., "database,technology")
+    - from_date: Start date (ISO8601, e.g., "2025-08-01T00:00:00Z")
+    - to_date: End date (ISO8601)
+    - search_text: Full-text search on question field
+    - limit: Maximum results (default 10, max 100)
+    """
+    from datetime import datetime
+    from bridge.memory.api_schemas import SearchChoicePointsResponse, ChoicePointEnhancedResponse
+
+    # TODO: Implement search using ChoiceQueryEngine once integrated
+    # For now, return empty results
+    return SearchChoicePointsResponse(
+        results=[],
+        count=0,
+        query={
+            "user_id": user_id,
+            "tags": tags.split(",") if tags else None,
+            "from_date": from_date,
+            "to_date": to_date,
+            "search_text": search_text,
+            "limit": limit
+        }
     )
 
 

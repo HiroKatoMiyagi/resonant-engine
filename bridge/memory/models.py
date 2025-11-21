@@ -227,26 +227,50 @@ class AgentContext(BaseModel):
 
 
 class Choice(BaseModel):
-    """A single choice option with its implications"""
+    """
+    A single choice option with its implications (Sprint 10 Enhanced).
+
+    Enhanced in Sprint 10 to support:
+    - Selection status tracking
+    - Evaluation scoring
+    - Rejection reason recording
+    """
     id: str
     description: str
     implications: Dict[str, Any] = Field(default_factory=dict)
 
+    # 🆕 Sprint 10 additions
+    selected: bool = False  # Whether this choice was selected
+    evaluation_score: Optional[float] = Field(None, ge=0.0, le=1.0)  # Evaluation score (0-1)
+    rejection_reason: Optional[str] = Field(None, max_length=1000)  # Reason for rejection if not selected
+    evaluated_at: Optional[datetime] = None  # When this choice was evaluated
+
 
 class ChoicePoint(BaseModel):
     """
-    Choice point management - breathing phase 3 "Structuring".
+    Choice point management - breathing phase 3 "Structuring" (Sprint 10 Enhanced).
 
     Records decision points where choices are preserved, not forced.
     Selected choice can be NULL to indicate a pending decision.
+
+    Enhanced in Sprint 10 to support:
+    - Tag-based categorization
+    - Context type classification
+    - User-specific choice points
+    - Historical querying
     """
     id: UUID = Field(default_factory=uuid4)
+    user_id: str  # 🆕 Sprint 10: User identification
     session_id: UUID
     intent_id: UUID
 
     question: str
-    choices: List[Choice]
+    choices: List[Choice]  # Now using enhanced Choice model
     selected_choice_id: Optional[str] = None
+
+    # 🆕 Sprint 10 additions
+    tags: List[str] = Field(default_factory=list, max_length=10)  # Categorization tags
+    context_type: str = "general"  # Context type: "architecture", "feature", "bug_fix", "general"
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     decided_at: Optional[datetime] = None
@@ -262,6 +286,13 @@ class ChoicePoint(BaseModel):
         choice_ids = [c.id for c in v]
         if len(choice_ids) != len(set(choice_ids)):
             raise ValueError("Choice IDs must be unique")
+        return v
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, v: List[str]) -> List[str]:
+        if len(v) > 10:
+            raise ValueError("Maximum 10 tags allowed")
         return v
 
     class Config:

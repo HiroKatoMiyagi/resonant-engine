@@ -1,8 +1,8 @@
 from uuid import UUID
 from typing import List, Optional, Tuple
 import json
-from app.repositories.base import BaseRepository
-from app.models.intent import IntentCreate, IntentUpdate, IntentStatusUpdate, IntentResponse
+from backend.app.repositories.base import BaseRepository
+from backend.app.models.intent import IntentCreate, IntentUpdate, IntentStatusUpdate, IntentResponse
 
 
 class IntentRepository(BaseRepository):

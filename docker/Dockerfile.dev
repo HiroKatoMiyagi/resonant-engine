@@ -1,0 +1,40 @@
+# Dockerfile for Resonant Engine Development Environment
+# Supports all Sprint tests (Sprint 3-11)
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies for all Sprints
+RUN pip install --no-cache-dir \
+    # Testing
+    pytest==8.0.0 \
+    pytest-asyncio==0.23.0 \
+    pytest-cov==7.0.0 \
+    # Database
+    asyncpg==0.30.0 \
+    sqlalchemy[asyncio]==2.0.23 \
+    # AI
+    anthropic>=0.73.0 \
+    # Web Framework
+    fastapi==0.104.1 \
+    pydantic==2.5.0 \
+    pydantic-settings \
+    # Utilities
+    numpy \
+    tiktoken \
+    python-dotenv \
+    httpx \
+    aiohttp
+
+# Set Python path to include project root
+ENV PYTHONPATH=/app
+
+# Keep container running for interactive development
+CMD ["tail", "-f", "/dev/null"]

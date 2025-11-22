@@ -1,8 +1,8 @@
 from uuid import UUID
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
-from app.models.intent import IntentCreate, IntentUpdate, IntentStatusUpdate, IntentResponse, IntentListResponse
-from app.repositories.intent_repo import IntentRepository
+from backend.app.models.intent import IntentCreate, IntentUpdate, IntentStatusUpdate, IntentResponse, IntentListResponse
+from backend.app.repositories.intent_repo import IntentRepository
 
 router = APIRouter(prefix="/api/intents", tags=["intents"])
 repo = IntentRepository()

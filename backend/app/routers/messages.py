@@ -1,8 +1,8 @@
 from uuid import UUID
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
-from app.models.message import MessageCreate, MessageUpdate, MessageResponse, MessageListResponse
-from app.repositories.message_repo import MessageRepository
+from backend.app.models.message import MessageCreate, MessageUpdate, MessageResponse, MessageListResponse
+from backend.app.repositories.message_repo import MessageRepository
 
 router = APIRouter(prefix="/api/messages", tags=["messages"])
 repo = MessageRepository()

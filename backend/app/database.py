@@ -1,5 +1,5 @@
 import asyncpg
-from app.config import settings
+from backend.app.config import settings
 
 
 class Database:

@@ -4,9 +4,9 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from app.database import db
-from app.config import settings
-from app.routers import messages, specifications, intents, notifications
+from backend.app.database import db
+from backend.app.config import settings
+from backend.app.routers import messages, specifications, intents, notifications
 
 # Configure logging
 logging.basicConfig(

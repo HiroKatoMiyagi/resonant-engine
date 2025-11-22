@@ -1,8 +1,8 @@
 from uuid import UUID
 from typing import List, Optional, Tuple
 import json
-from app.repositories.base import BaseRepository
-from app.models.specification import SpecificationCreate, SpecificationUpdate, SpecificationResponse
+from backend.app.repositories.base import BaseRepository
+from backend.app.models.specification import SpecificationCreate, SpecificationUpdate, SpecificationResponse
 
 
 class SpecificationRepository(BaseRepository):

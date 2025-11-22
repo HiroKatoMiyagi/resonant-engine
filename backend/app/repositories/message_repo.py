@@ -1,8 +1,8 @@
 from uuid import UUID
 from typing import List, Optional, Tuple
 import json
-from app.repositories.base import BaseRepository
-from app.models.message import MessageCreate, MessageUpdate, MessageResponse
+from backend.app.repositories.base import BaseRepository
+from backend.app.models.message import MessageCreate, MessageUpdate, MessageResponse
 
 
 class MessageRepository(BaseRepository):

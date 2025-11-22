@@ -1,8 +1,8 @@
 from uuid import UUID
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Query
-from app.models.specification import SpecificationCreate, SpecificationUpdate, SpecificationResponse, SpecificationListResponse
-from app.repositories.specification_repo import SpecificationRepository
+from backend.app.models.specification import SpecificationCreate, SpecificationUpdate, SpecificationResponse, SpecificationListResponse
+from backend.app.repositories.specification_repo import SpecificationRepository
 
 router = APIRouter(prefix="/api/specifications", tags=["specifications"])
 repo = SpecificationRepository()

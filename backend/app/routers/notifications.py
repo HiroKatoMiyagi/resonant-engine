@@ -1,8 +1,8 @@
 from uuid import UUID
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
-from app.models.notification import NotificationCreate, NotificationResponse, NotificationListResponse, NotificationMarkReadRequest
-from app.repositories.notification_repo import NotificationRepository
+from backend.app.models.notification import NotificationCreate, NotificationResponse, NotificationListResponse, NotificationMarkReadRequest
+from backend.app.repositories.notification_repo import NotificationRepository
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 repo = NotificationRepository()

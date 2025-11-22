@@ -1,8 +1,8 @@
 from uuid import UUID
 from typing import List, Optional, Tuple
 import json
-from app.repositories.base import BaseRepository
-from app.models.notification import NotificationCreate, NotificationResponse
+from backend.app.repositories.base import BaseRepository
+from backend.app.models.notification import NotificationCreate, NotificationResponse
 
 
 class NotificationRepository(BaseRepository):

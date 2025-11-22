@@ -1,0 +1,82 @@
+version: '3.9'
+
+services:
+  postgres_dev:
+    image: pgvector/pgvector:pg15
+    container_name: resonant_postgres_dev
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-resonant}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./postgres/002_intent_notify.sql:/docker-entrypoint-initdb.d/02_intent_notify.sql:ro
+      - ./postgres/003_message_notify.sql:/docker-entrypoint-initdb.d/03_message_notify.sql:ro
+      - ./postgres/004_claude_code_tables.sql:/docker-entrypoint-initdb.d/04_claude_code_tables.sql:ro
+      - ./postgres/005_user_profile_tables.sql:/docker-entrypoint-initdb.d/05_user_profile_tables.sql:ro
+      - ./postgres/006_choice_points_initial.sql:/docker-entrypoint-initdb.d/06_choice_points_initial.sql:ro
+      - ./postgres/006_memory_lifecycle_tables.sql:/docker-entrypoint-initdb.d/06b_memory_lifecycle_tables.sql:ro
+      - ./postgres/007_choice_preservation_completion.sql:/docker-entrypoint-initdb.d/07_choice_preservation_completion.sql:ro
+      - ./postgres/008_contradiction_detection.sql:/docker-entrypoint-initdb.d/08_contradiction_detection.sql:ro
+      - ./postgres/008_intents_migration.sql:/docker-entrypoint-initdb.d/08b_intents_migration.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-resonant} -d ${POSTGRES_DB:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - resonant_dev_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    container_name: resonant_dev
+    depends_on:
+      postgres_dev:
+        condition: service_healthy
+    environment:
+      # Database configuration
+      DATABASE_URL: postgresql+asyncpg://resonant:password@postgres_dev:5432/postgres
+      POSTGRES_HOST: postgres_dev
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-resonant}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      # Test configuration
+      PYTHONPATH: /app
+      DEBUG: ${DEBUG:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+      # API Key (optional for E2E tests)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      # Mount source code for live editing
+      - ..:/app:cached
+      # Exclude certain directories from mount
+      - /app/.git
+      - /app/__pycache__
+      - /app/.pytest_cache
+    networks:
+      - resonant_dev_network
+    tty: true
+    stdin_open: true
+
+volumes:
+  postgres_dev_data:
+    name: resonant_postgres_dev_data
+
+networks:
+  resonant_dev_network:
+    name: resonant_dev_network
+    driver: bridge

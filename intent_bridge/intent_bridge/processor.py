@@ -15,6 +15,7 @@ class IntentProcessor:
         self.claude_code_client = None  # Claude Code Client
         self.classifier = None  # Intent Classifier
         self.session_manager = None  # Sprint 7: Session Manager
+        self.contradiction_detector = None  # Sprint 11: Contradiction Detector
 
     async def initialize(self):
         """非同期初期化: KanaAIBridge、Claude Code Client、Classifierを生成"""
@@ -41,6 +42,9 @@ class IntentProcessor:
             # Sprint 7: SessionManager初期化
             await self._initialize_session_manager()
 
+            # Sprint 11: ContradictionDetector初期化
+            await self._initialize_contradiction_detector()
+
         except Exception as e:
             logger.error(f"❌ Failed to initialize IntentProcessor components: {e}")
             raise
@@ -62,6 +66,19 @@ class IntentProcessor:
         except Exception as e:
             logger.warning(f"⚠️ SessionManager initialization failed: {e}")
             self.session_manager = None
+
+    async def _initialize_contradiction_detector(self):
+        """Sprint 11: ContradictionDetectorを初期化"""
+        try:
+            from bridge.factory.bridge_factory import BridgeFactory
+
+            self.contradiction_detector = BridgeFactory.create_contradiction_detector(
+                pool=self.pool
+            )
+            logger.info("✅ ContradictionDetector initialized")
+        except Exception as e:
+            logger.warning(f"⚠️ ContradictionDetector initialization failed: {e}")
+            self.contradiction_detector = None
 
     async def process(self, intent_id):
         # 初回呼び出し時のみ初期化
@@ -85,6 +102,53 @@ class IntentProcessor:
 
             logger.info(f"📋 Intent classified as: {intent_type}")
             logger.info(f"🔍 Reason: {classification_reason}")
+
+            # Sprint 11: 矛盾検出チェック（オプショナル）
+            contradictions = []
+            if self.contradiction_detector:
+                try:
+                    from uuid import UUID
+                    contradictions = await self.contradiction_detector.check_new_intent(
+                        user_id=intent.get('user_id', 'hiroki'),
+                        new_intent_id=UUID(str(intent['id'])),
+                        new_intent_content=intent['description'],
+                    )
+
+                    if contradictions:
+                        # 高信頼度の矛盾が検出された場合
+                        high_confidence = [c for c in contradictions if c.confidence_score > 0.85]
+                        if high_confidence:
+                            logger.warning(
+                                f"⚠️ Intent {intent_id}: {len(high_confidence)} high-confidence "
+                                f"contradictions detected. Pausing for confirmation."
+                            )
+                            # Intent処理を一時停止（ユーザー確認待ち）
+                            await conn.execute("""
+                                UPDATE intents
+                                SET status = 'paused_for_confirmation',
+                                    result = $1::jsonb,
+                                    updated_at = NOW()
+                                WHERE id = $2
+                            """, json.dumps({
+                                "contradictions": [
+                                    {
+                                        "type": c.contradiction_type,
+                                        "confidence": c.confidence_score,
+                                        "details": c.details,
+                                    }
+                                    for c in high_confidence
+                                ],
+                                "message": "High-confidence contradictions detected. Please review."
+                            }), intent_id)
+                            
+                            await self.create_notification(
+                                conn, intent_id, 'warning', 'contradiction_detected'
+                            )
+                            return  # Intent処理を中断
+
+                except Exception as e:
+                    logger.error(f"❌ Contradiction detection failed: {e}")
+                    # 矛盾検出失敗でもIntent処理は継続
 
             # 3. ステータス更新: processing
             await conn.execute("""
@@ -353,6 +417,16 @@ class IntentProcessor:
             title = f"Intent処理完了 {type_label}"
             msg = f"Intent {str(intent_id)[:8]}... が正常に処理されました"
             notification_type = "success"
+        elif status == 'warning':
+            # Sprint 11: Contradiction detection notification
+            if intent_type == 'contradiction_detected':
+                title = "⚠️ 矛盾検出"
+                msg = f"Intent {str(intent_id)[:8]}... で矛盾が検出されました。確認が必要です。"
+                notification_type = "warning"
+            else:
+                title = "Intent処理警告"
+                msg = f"Intent {str(intent_id)[:8]}... の処理で警告が発生しました"
+                notification_type = "warning"
         else:
             title = "Intent処理失敗"
             msg = f"Intent {str(intent_id)[:8]}... の処理に失敗しました"

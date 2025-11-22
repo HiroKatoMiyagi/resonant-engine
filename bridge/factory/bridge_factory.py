@@ -97,6 +97,31 @@ class BridgeFactory:
         raise ValueError(f"Unsupported AI_BRIDGE_TYPE: {bridge_key}")
 
     @staticmethod
+    def create_contradiction_detector(
+        pool: asyncpg.Pool,
+    ) -> Any:
+        """
+        Sprint 11: Contradiction Detector生成
+
+        Args:
+            pool: PostgreSQL接続プール
+
+        Returns:
+            ContradictionDetector: 矛盾検出サービス
+
+        Example:
+            >>> detector = BridgeFactory.create_contradiction_detector(pool)
+            >>> contradictions = await detector.check_new_intent(
+            ...     user_id="hiroki",
+            ...     new_intent_id=intent_id,
+            ...     new_intent_content="Use SQLite database"
+            ... )
+        """
+        from bridge.contradiction.detector import ContradictionDetector
+
+        return ContradictionDetector(pool=pool)
+
+    @staticmethod
     def create_feedback_bridge(
         bridge_type: Optional[str] = None,
         *,

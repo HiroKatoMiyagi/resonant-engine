@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Dict, List, Optional, TYPE_CHECKING
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 # Sprint 8: User Profile support
 if TYPE_CHECKING:
@@ -74,5 +74,4 @@ class AssembledContext(BaseModel):
     # Sprint 8: User Profile support
     profile_context: Optional['ProfileContext'] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

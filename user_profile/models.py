@@ -5,7 +5,7 @@ Sprint 8: User Profile & Persistent Context
 Pydanticモデル定義
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import date, datetime
 from uuid import UUID
@@ -25,8 +25,7 @@ class UserProfile(BaseModel):
     encryption_key_id: Optional[str] = None
     is_active: bool = True
 
-    class Config:
-        from_attributes = True  # Pydantic v2
+    model_config = ConfigDict(from_attributes=True)  # Pydantic v2
 
 
 class CognitiveTrait(BaseModel):
@@ -42,8 +41,7 @@ class CognitiveTrait(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FamilyMember(BaseModel):
@@ -58,8 +56,7 @@ class FamilyMember(BaseModel):
     updated_at: Optional[datetime] = None
     encryption_key_id: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserGoal(BaseModel):
@@ -78,8 +75,7 @@ class UserGoal(BaseModel):
     updated_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ResonantConcept(BaseModel):
@@ -95,8 +91,7 @@ class ResonantConcept(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserProfileData(BaseModel):
@@ -108,5 +103,4 @@ class UserProfileData(BaseModel):
     goals: List[UserGoal] = []
     resonant_concepts: List[ResonantConcept] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class MemoryType(str, Enum):
@@ -34,8 +34,7 @@ class MemoryCreate(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
     expires_at: Optional[datetime] = None
 
-    class Config:
-        use_enum_values = False
+    model_config = ConfigDict(use_enum_values=False)
 
 
 class MemoryRecord(BaseModel):
@@ -51,8 +50,7 @@ class MemoryRecord(BaseModel):
     expires_at: Optional[datetime] = None
     is_archived: bool = False
 
-    class Config:
-        use_enum_values = False
+    model_config = ConfigDict(use_enum_values=False)
 
 
 class MemoryResult(BaseModel):
@@ -65,9 +63,7 @@ class MemoryResult(BaseModel):
     similarity: float = Field(..., ge=0.0, le=1.0)
     created_at: datetime
 
-    class Config:
-        use_enum_values = False
-        from_attributes = True
+    model_config = ConfigDict(use_enum_values=False, from_attributes=True)
 
 
 class MemorySearchQuery(BaseModel):
@@ -88,8 +84,7 @@ class MemorySearchQuery(BaseModel):
     created_after: Optional[datetime] = None
     created_before: Optional[datetime] = None
 
-    class Config:
-        use_enum_values = False
+    model_config = ConfigDict(use_enum_values=False)
 
 
 class MemoryStoreConfig(BaseModel):
@@ -116,8 +111,7 @@ class SessionSummaryResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SessionStats(BaseModel):

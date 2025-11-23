@@ -8,7 +8,7 @@ Metrics Collector - メトリクス収集
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from memory_store.models import MemoryResult
 
@@ -31,8 +31,7 @@ class SearchMetrics(BaseModel):
     rerank_time_ms: float = 0.0
     strategy_selection_time_ms: float = 0.0
 
-    class Config:
-        use_enum_values = False
+    model_config = ConfigDict(use_enum_values=False)
 
 
 class MetricsCollector:

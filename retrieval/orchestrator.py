@@ -8,7 +8,7 @@ Retrieval Orchestrator - 検索オーケストレーター
 import time
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from memory_store.models import MemoryResult
 from memory_store.service import MemoryStoreService
@@ -28,8 +28,7 @@ class RetrievalOptions(BaseModel):
     include_metadata_details: bool = False
     log_metrics: bool = True
 
-    class Config:
-        use_enum_values = False
+    model_config = ConfigDict(use_enum_values=False)
 
 
 class RetrievalMetadata(BaseModel):
@@ -42,8 +41,7 @@ class RetrievalMetadata(BaseModel):
     num_results_before_rerank: int = Field(..., ge=0)
     num_results_after_rerank: int = Field(..., ge=0)
 
-    class Config:
-        use_enum_values = False
+    model_config = ConfigDict(use_enum_values=False)
 
 
 class RetrievalResponse(BaseModel):
@@ -52,9 +50,7 @@ class RetrievalResponse(BaseModel):
     results: List[MemoryResult]
     metadata: RetrievalMetadata
 
-    class Config:
-        use_enum_values = False
-        from_attributes = True
+    model_config = ConfigDict(use_enum_values=False, from_attributes=True)
 
 
 class RetrievalOrchestrator:

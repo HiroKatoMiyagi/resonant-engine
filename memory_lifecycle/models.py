@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class MemoryScore(BaseModel):
@@ -20,8 +20,7 @@ class MemoryScore(BaseModel):
     access_count: int = Field(ge=0, default=0)
     decay_applied_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MemoryArchive(BaseModel):
@@ -40,8 +39,7 @@ class MemoryArchive(BaseModel):
     archive_reason: str = Field(description="Reason: low_importance, capacity_limit, manual")
     retention_until: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LifecycleEvent(BaseModel):
@@ -55,8 +53,7 @@ class LifecycleEvent(BaseModel):
     score_after: Optional[float] = Field(None, ge=0.0, le=1.0)
     event_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CompressionResult(BaseModel):

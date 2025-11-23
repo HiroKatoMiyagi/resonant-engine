@@ -8,7 +8,7 @@ Strategy Selector - 検索戦略の選択
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from .query_analyzer import QueryIntent, QueryType
 
@@ -31,8 +31,7 @@ class SearchParams(BaseModel):
     similarity_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
     time_decay_factor: float = Field(default=0.1, ge=0.0, le=1.0)
 
-    class Config:
-        validate_assignment = True
+    model_config = ConfigDict(validate_assignment=True)
 
 
 class StrategySelector:

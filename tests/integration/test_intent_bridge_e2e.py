@@ -11,6 +11,7 @@
 pytest tests/integration/test_intent_bridge_e2e.py -v -m e2e
 """
 
+import os
 import pytest
 import asyncpg
 from uuid import uuid4
@@ -152,19 +153,18 @@ async def test_intent_processing_e2e_mock(db_pool, setup_test_data):
 
 @pytest.mark.asyncio
 @pytest.mark.slow
-@pytest.mark.skip(reason="Requires actual ANTHROPIC_API_KEY and may incur costs")
+@pytest.mark.skipif(
+    not os.getenv("ANTHROPIC_API_KEY"),
+    reason="ANTHROPIC_API_KEY not set - このテストは実際のClaude APIを使用します"
+)
 async def test_intent_processing_e2e_real(db_pool, setup_test_data):
     """
     Intent処理E2E（実際のClaude API使用）(TC-11)
 
-    警告: このテストは実際のClaude APIを呼び出すため、コストが発生します。
-    実行するには@pytest.mark.skipを削除してください。
+    注意: このテストは実際のClaude APIを呼び出すため、APIコストが発生します。
+    ANTHROPIC_API_KEYが設定されている場合のみ実行されます。
     """
-    import os
-
     api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        pytest.skip("ANTHROPIC_API_KEY not set")
 
     # Intent作成
     intent_id = uuid4()

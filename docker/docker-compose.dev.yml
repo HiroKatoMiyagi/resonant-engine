@@ -44,6 +44,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-resonant}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-resonant}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-postgres}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       DEBUG: ${DEBUG:-true}
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}

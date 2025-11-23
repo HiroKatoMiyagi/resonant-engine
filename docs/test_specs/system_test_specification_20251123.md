@@ -1,7 +1,7 @@
 # Resonant Engine 総合テスト仕様書
 
 **作成日**: 2025-11-23
-**バージョン**: 3.3（Docker環境構築手順追加版）
+**バージョン**: 3.4（開発環境/本番環境の明確化版）
 **対象環境**: 開発環境（Docker Compose）
 **テスト種別**: システムテスト / 総合テスト
 
@@ -45,9 +45,16 @@
 
 ## 📋 変更履歴
 
+### v3.4 変更点（2025-11-23）
+
+- 開発環境（`docker-compose.dev.yml`）と本番環境（`docker-compose.yml`）の違いを明確化
+- テストは開発環境を使用することを明記
+- `start-dev.sh`スクリプトによる起動手順を追加
+- 本番環境との比較表を追加
+
 ### v3.3 変更点（2025-11-23）
 
-- Docker環境構築手順（セクション2.3）を追加
+- Docker環境構築手順（セクション2.4）を追加
 - コンテナ作成・起動の詳細手順を明記
 
 ### v3.2 修正済み課題（2025-11-23）
@@ -121,52 +128,61 @@
 
 ## 2. テスト環境
 
-### 2.1 システム構成
+### 2.1 環境の種類
+
+| 環境 | Docker Composeファイル | 用途 |
+|-----|----------------------|------|
+| **開発環境（テスト用）** | `docker-compose.dev.yml` | テスト実行、開発 |
+| 本番環境 | `docker-compose.yml` | 本番デプロイ |
+
+**総合テストは開発環境（docker-compose.dev.yml）を使用すること。**
+
+### 2.2 開発環境のシステム構成
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Docker Compose 開発環境（docker/docker-compose.yml）          │
+│ Docker Compose 開発環境（docker/docker-compose.dev.yml）      │
 ├─────────────────────────────────────────────────────────────┤
-│ resonant_postgres   │ PostgreSQL 15 (pgvector) │ port:5432  │
-│ resonant_backend    │ Backend API (FastAPI)    │ port:8000  │
-│ resonant_frontend   │ Frontend (React)         │ port:3000  │
-│ resonant_intent_bridge  │ Intent Bridge        │ -          │
-│ resonant_message_bridge │ Message Bridge       │ -          │
+│ resonant_postgres_dev │ PostgreSQL 15 (pgvector) │ port:5432│
+│ resonant_dev          │ Python開発環境           │ port:8000│
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**注意**: `resonant_dev`コンテナは別途作成が必要（セクション2.3参照）
-
-### 2.2 ネットワーク構成（重要）
+### 2.3 ネットワーク構成（重要）
 
 ```
-Docker内部ネットワーク (resonant_network):
+Docker内部ネットワーク (resonant_dev_network):
   resonant_dev → postgres:5432 (サービス名で接続)
-  resonant_dev → backend:8000
 
 ローカルマシン:
-  localhost:5432 → resonant_postgres
-  localhost:8000 → resonant_backend
+  localhost:5432 → resonant_postgres_dev
+  localhost:8000 → resonant_dev
 ```
 
 **ポイント**: Dockerコンテナ内からDBに接続する場合、ホスト名は`postgres`（サービス名）を使用する。`localhost`は使用しない。
 
-### 2.3 Docker環境構築手順（v3.3追加）
+### 2.4 Docker環境構築手順（v3.4更新）
 
-#### Step 1: 環境変数ファイルの作成
+#### Step 1: 環境変数ファイルの確認
 
 ```bash
 cd docker
-cp .env.example .env
+ls -la .env.dev  # 存在確認
 ```
 
-`.env`ファイルを編集：
+`.env.dev`が存在しない場合のみ作成：
+
+```bash
+cp .env.example .env.dev
+```
+
+`.env.dev`の内容を確認・編集：
 
 ```bash
 # 必須設定
 POSTGRES_USER=resonant
-POSTGRES_PASSWORD=your_secure_password_here  # ← 必ず変更
-POSTGRES_DB=resonant_dashboard
+POSTGRES_PASSWORD=password
+POSTGRES_DB=postgres
 POSTGRES_PORT=5432
 
 # AI統合テスト用（ST-AI, ST-MEM実行時に必須）
@@ -177,78 +193,78 @@ DEBUG=true
 LOG_LEVEL=DEBUG
 ```
 
-#### Step 2: コンテナのビルドと起動
+#### Step 2: 開発環境の起動（推奨方法）
 
 ```bash
-# プロジェクトルートから実行
+# スクリプトで起動（推奨）
+./docker/scripts/start-dev.sh
+```
+
+または手動で：
+
+```bash
 cd docker
+docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d --build
+```
 
-# コンテナをビルド＆起動
-docker-compose up -d --build
+#### Step 3: 起動確認
 
-# 起動確認
+```bash
 docker ps | grep resonant
 ```
 
 **期待される出力:**
 ```
-resonant_postgres        ... Up (healthy) ...
-resonant_backend         ... Up ...
-resonant_frontend        ... Up ...
-resonant_intent_bridge   ... Up ...
-resonant_message_bridge  ... Up ...
+resonant_postgres_dev  ... Up (healthy) ...
+resonant_dev           ... Up ...
 ```
 
-#### Step 3: テスト実行用コンテナの作成（resonant_dev）
-
-**重要**: docker-compose.ymlには`resonant_dev`が含まれていないため、手動で作成する必要がある。
+#### Step 4: テスト実行
 
 ```bash
-# 方法A: 既存のbackendコンテナに入ってテスト実行
-docker exec -it resonant_backend bash
-cd /app && pytest tests/system/ -v
+# 全テスト実行
+docker exec resonant_dev pytest tests/system/ -v
 
-# 方法B: 一時的なPythonコンテナを作成してテスト実行
-docker run --rm -it \
-  --network resonant_network \
-  -v $(pwd)/..:/app \
-  -w /app \
-  -e POSTGRES_HOST=postgres \
-  -e POSTGRES_PORT=5432 \
-  -e POSTGRES_USER=resonant \
-  -e POSTGRES_PASSWORD=your_password \
-  -e POSTGRES_DB=resonant_dashboard \
-  -e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} \
-  python:3.11-slim \
-  bash -c "pip install -r backend/requirements.txt pytest pytest-asyncio asyncpg && pytest tests/system/ -v"
+# 特定カテゴリのテスト
+docker exec resonant_dev pytest tests/contradiction/ -v
+
+# コンテナ内でシェル実行
+docker exec -it resonant_dev bash
 ```
 
-#### Step 4: スクリプトによる起動（推奨）
+#### Step 5: 環境停止
 
 ```bash
-# 起動スクリプト使用
-./docker/scripts/start.sh
-
-# 停止
+# スクリプトで停止
 ./docker/scripts/stop.sh
 
-# ヘルスチェック
-./docker/scripts/check-health.sh
-
-# データベースリセット（注意: データ削除）
-./docker/scripts/reset-db.sh
+# または手動で
+cd docker
+docker-compose -f docker-compose.dev.yml --env-file .env.dev down
 ```
 
 #### Docker環境の注意事項
 
 | 項目 | 説明 |
 |-----|------|
-| 使用ファイル | `docker/docker-compose.yml`のみ（dev版は存在しない） |
-| PostgreSQL | 起動時に`postgres/`ディレクトリ内のSQLが自動実行される |
-| 環境変数 | docker-compose.ymlでDATABASE_URL, ANTHROPIC_API_KEYを自動設定 |
-| ネットワーク | `resonant_network`（bridge）を全コンテナで共有 |
+| **使用ファイル** | `docker/docker-compose.dev.yml`（開発・テスト用） |
+| 環境変数ファイル | `.env.dev`（開発用）または`.env`（本番用） |
+| PostgreSQL | `ankane/pgvector:latest`イメージ使用、起動時にSQLを自動実行 |
+| ソースマウント | ソースコードは読み取り専用でマウント（ライブ更新対応） |
+| ネットワーク | `resonant_dev_network`（bridge） |
 
-### 2.4 既存のconftest.py（必ず使用すること）
+#### 本番環境との違い
+
+| 項目 | 開発環境 (dev) | 本番環境 |
+|-----|---------------|---------|
+| Composeファイル | `docker-compose.dev.yml` | `docker-compose.yml` |
+| 環境変数 | `.env.dev` | `.env` |
+| テストコンテナ | `resonant_dev` ✅ | なし |
+| ソースマウント | あり（読み取り専用） | なし（ビルド済み） |
+| PostgreSQLコンテナ | `resonant_postgres_dev` | `resonant_postgres` |
+| ネットワーク | `resonant_dev_network` | `resonant_network` |
+
+### 2.5 既存のconftest.py（必ず使用すること）
 
 ```python
 # tests/conftest.py（既存・変更禁止）
@@ -1163,4 +1179,4 @@ async def test_example(db_pool):
 
 **テスト仕様書作成者**: Claude Code
 **最終更新**: 2025-11-23
-**バージョン**: 3.3（Docker環境構築手順追加版）
+**バージョン**: 3.4（開発環境/本番環境の明確化版）

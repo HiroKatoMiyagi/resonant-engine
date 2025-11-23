@@ -1,7 +1,7 @@
 # Resonant Engine 総合テスト仕様書
 
 **作成日**: 2025-11-23
-**バージョン**: 3.2（環境変数・Pydantic V2対応版）
+**バージョン**: 3.3（Docker環境構築手順追加版）
 **対象環境**: 開発環境（Docker Compose）
 **テスト種別**: システムテスト / 総合テスト
 
@@ -43,9 +43,14 @@
 
 ---
 
-## 📋 v3.2 変更履歴
+## 📋 変更履歴
 
-### 修正済み課題（2025-11-23）
+### v3.3 変更点（2025-11-23）
+
+- Docker環境構築手順（セクション2.3）を追加
+- コンテナ作成・起動の詳細手順を明記
+
+### v3.2 修正済み課題（2025-11-23）
 
 | コミット | 修正内容 | 影響範囲 |
 |---------|---------|---------|
@@ -120,29 +125,130 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Docker Compose 開発環境                                      │
+│ Docker Compose 開発環境（docker/docker-compose.yml）          │
 ├─────────────────────────────────────────────────────────────┤
 │ resonant_postgres   │ PostgreSQL 15 (pgvector) │ port:5432  │
-│ resonant_dev        │ Python開発環境           │ テスト実行  │
-│ resonant_api        │ Backend API (FastAPI)    │ port:8000  │
+│ resonant_backend    │ Backend API (FastAPI)    │ port:8000  │
+│ resonant_frontend   │ Frontend (React)         │ port:3000  │
+│ resonant_intent_bridge  │ Intent Bridge        │ -          │
+│ resonant_message_bridge │ Message Bridge       │ -          │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+**注意**: `resonant_dev`コンテナは別途作成が必要（セクション2.3参照）
 
 ### 2.2 ネットワーク構成（重要）
 
 ```
-Docker内部ネットワーク:
+Docker内部ネットワーク (resonant_network):
   resonant_dev → postgres:5432 (サービス名で接続)
-  resonant_dev → resonant_api:8000
+  resonant_dev → backend:8000
 
 ローカルマシン:
   localhost:5432 → resonant_postgres
-  localhost:8000 → resonant_api
+  localhost:8000 → resonant_backend
 ```
 
 **ポイント**: Dockerコンテナ内からDBに接続する場合、ホスト名は`postgres`（サービス名）を使用する。`localhost`は使用しない。
 
-### 2.3 既存のconftest.py（必ず使用すること）
+### 2.3 Docker環境構築手順（v3.3追加）
+
+#### Step 1: 環境変数ファイルの作成
+
+```bash
+cd docker
+cp .env.example .env
+```
+
+`.env`ファイルを編集：
+
+```bash
+# 必須設定
+POSTGRES_USER=resonant
+POSTGRES_PASSWORD=your_secure_password_here  # ← 必ず変更
+POSTGRES_DB=resonant_dashboard
+POSTGRES_PORT=5432
+
+# AI統合テスト用（ST-AI, ST-MEM実行時に必須）
+ANTHROPIC_API_KEY=sk-ant-api03-xxxxx  # ← 有効なAPIキーを設定
+
+# オプション
+DEBUG=true
+LOG_LEVEL=DEBUG
+```
+
+#### Step 2: コンテナのビルドと起動
+
+```bash
+# プロジェクトルートから実行
+cd docker
+
+# コンテナをビルド＆起動
+docker-compose up -d --build
+
+# 起動確認
+docker ps | grep resonant
+```
+
+**期待される出力:**
+```
+resonant_postgres        ... Up (healthy) ...
+resonant_backend         ... Up ...
+resonant_frontend        ... Up ...
+resonant_intent_bridge   ... Up ...
+resonant_message_bridge  ... Up ...
+```
+
+#### Step 3: テスト実行用コンテナの作成（resonant_dev）
+
+**重要**: docker-compose.ymlには`resonant_dev`が含まれていないため、手動で作成する必要がある。
+
+```bash
+# 方法A: 既存のbackendコンテナに入ってテスト実行
+docker exec -it resonant_backend bash
+cd /app && pytest tests/system/ -v
+
+# 方法B: 一時的なPythonコンテナを作成してテスト実行
+docker run --rm -it \
+  --network resonant_network \
+  -v $(pwd)/..:/app \
+  -w /app \
+  -e POSTGRES_HOST=postgres \
+  -e POSTGRES_PORT=5432 \
+  -e POSTGRES_USER=resonant \
+  -e POSTGRES_PASSWORD=your_password \
+  -e POSTGRES_DB=resonant_dashboard \
+  -e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} \
+  python:3.11-slim \
+  bash -c "pip install -r backend/requirements.txt pytest pytest-asyncio asyncpg && pytest tests/system/ -v"
+```
+
+#### Step 4: スクリプトによる起動（推奨）
+
+```bash
+# 起動スクリプト使用
+./docker/scripts/start.sh
+
+# 停止
+./docker/scripts/stop.sh
+
+# ヘルスチェック
+./docker/scripts/check-health.sh
+
+# データベースリセット（注意: データ削除）
+./docker/scripts/reset-db.sh
+```
+
+#### Docker環境の注意事項
+
+| 項目 | 説明 |
+|-----|------|
+| 使用ファイル | `docker/docker-compose.yml`のみ（dev版は存在しない） |
+| PostgreSQL | 起動時に`postgres/`ディレクトリ内のSQLが自動実行される |
+| 環境変数 | docker-compose.ymlでDATABASE_URL, ANTHROPIC_API_KEYを自動設定 |
+| ネットワーク | `resonant_network`（bridge）を全コンテナで共有 |
+
+### 2.4 既存のconftest.py（必ず使用すること）
 
 ```python
 # tests/conftest.py（既存・変更禁止）
@@ -1057,4 +1163,4 @@ async def test_example(db_pool):
 
 **テスト仕様書作成者**: Claude Code
 **最終更新**: 2025-11-23
-**バージョン**: 3.2（環境変数・Pydantic V2対応版）
+**バージョン**: 3.3（Docker環境構築手順追加版）

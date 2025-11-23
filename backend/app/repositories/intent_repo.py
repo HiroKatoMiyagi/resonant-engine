@@ -8,13 +8,13 @@ from app.models.intent import IntentCreate, IntentUpdate, IntentStatusUpdate, In
 class IntentRepository(BaseRepository):
     async def create(self, data: IntentCreate) -> IntentResponse:
         query = """
-        INSERT INTO intents (description, intent_type, priority, metadata)
+        INSERT INTO intents (intent_text, intent_type, priority, metadata)
         VALUES ($1, $2, $3, $4::jsonb)
         RETURNING *
         """
         row = await self.db.fetchrow(
             query,
-            data.description,
+            data.intent_text,
             data.intent_type,
             data.priority,
             json.dumps(data.metadata)
@@ -81,10 +81,10 @@ class IntentRepository(BaseRepository):
         params = [id]
         param_count = 1
 
-        if data.description is not None:
+        if data.intent_text is not None:
             param_count += 1
-            updates.append(f"description = ${param_count}")
-            params.append(data.description)
+            updates.append(f"intent_text = ${param_count}")
+            params.append(data.intent_text)
 
         if data.intent_type is not None:
             param_count += 1
@@ -101,10 +101,10 @@ class IntentRepository(BaseRepository):
             updates.append(f"priority = ${param_count}")
             params.append(data.priority)
 
-        if data.result is not None:
+        if data.outcome is not None:
             param_count += 1
-            updates.append(f"result = ${param_count}::jsonb")
-            params.append(json.dumps(data.result))
+            updates.append(f"outcome = ${param_count}::jsonb")
+            params.append(json.dumps(data.outcome))
 
         if data.metadata is not None:
             param_count += 1
@@ -125,19 +125,19 @@ class IntentRepository(BaseRepository):
 
     async def update_status(self, id: UUID, data: IntentStatusUpdate) -> Optional[IntentResponse]:
         params = [id, data.status.value]
-        result_sql = ""
+        outcome_sql = ""
 
-        if data.result is not None:
-            result_sql = ", result = $3::jsonb"
-            params.append(json.dumps(data.result))
+        if data.outcome is not None:
+            outcome_sql = ", outcome = $3::jsonb"
+            params.append(json.dumps(data.outcome))
 
-        processed_sql = ""
+        completed_sql = ""
         if data.status.value in ["completed", "failed"]:
-            processed_sql = ", processed_at = NOW()"
+            completed_sql = ", completed_at = NOW()"
 
         query = f"""
         UPDATE intents
-        SET status = $2{result_sql}{processed_sql}, updated_at = NOW()
+        SET status = $2{outcome_sql}{completed_sql}, updated_at = NOW()
         WHERE id = $1
         RETURNING *
         """
@@ -152,13 +152,13 @@ class IntentRepository(BaseRepository):
     def _to_response(self, row) -> IntentResponse:
         return IntentResponse(
             id=row['id'],
-            description=row['description'],
+            intent_text=row['intent_text'],
             intent_type=row['intent_type'],
             status=row['status'],
             priority=row['priority'],
-            result=row['result'] if isinstance(row['result'], dict) else None,
+            outcome=row['outcome'] if isinstance(row['outcome'], dict) else None,
             metadata=row['metadata'] if isinstance(row['metadata'], dict) else {},
             created_at=row['created_at'],
             updated_at=row['updated_at'],
-            processed_at=row['processed_at']
+            completed_at=row['completed_at']
         )

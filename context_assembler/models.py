@@ -72,7 +72,7 @@ class AssembledContext(BaseModel):
     messages: List[Dict[str, str]]
     metadata: ContextMetadata
     # Sprint 8: User Profile support
-    profile_context: Optional['ProfileContext'] = None
+    # profile_context: Optional['ProfileContext'] = None  # Disabled until ProfileContext is implemented
 
     class Config:
         from_attributes = True

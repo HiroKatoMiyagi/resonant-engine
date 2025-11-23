@@ -1,1 +1,3 @@
-# Resonant Dashboard Backend API
+"""
+Backend app package initialization
+"""

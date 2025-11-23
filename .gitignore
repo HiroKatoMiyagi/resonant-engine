@@ -18,3 +18,4 @@ daemon/logs/
 daemon/pids/
 daemon/hypothesis_trace_log.jsonl
 logs/trace_map.jsonl
+/.kiro

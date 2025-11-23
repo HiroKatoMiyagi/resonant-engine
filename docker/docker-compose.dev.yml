@@ -1,0 +1,90 @@
+version: '3.9'
+
+# Development environment with volume mounts for live code updates and testing
+services:
+  postgres:
+    image: ankane/pgvector:latest
+    container_name: resonant_postgres_dev
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-resonant}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-resonant} -d ${POSTGRES_DB:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - resonant_dev_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    container_name: resonant_dev
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-resonant}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DEBUG: ${DEBUG:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+      PYTHONPATH: /app:/app/backend
+    volumes:
+      # Mount source code for live development
+      - ../backend:/app/backend:ro
+      - ../bridge:/app/bridge:ro
+      - ../intent_bridge:/app/intent_bridge:ro
+      - ../message_bridge:/app/message_bridge:ro
+      - ../context_assembler:/app/context_assembler:ro
+      - ../memory_store:/app/memory_store:ro
+      - ../retrieval:/app/retrieval:ro
+      - ../summarization:/app/summarization:ro
+      - ../session:/app/session:ro
+      - ../memory_lifecycle:/app/memory_lifecycle:ro
+      - ../user_profile:/app/user_profile:ro
+      - ../utils:/app/utils:ro
+      # Mount tests for execution
+      - ../tests:/app/tests:ro
+      # Mount config files
+      - ../pyproject.toml:/app/pyproject.toml:ro
+      - ../pytest.ini:/app/pytest.ini:ro
+      - ../requirements.txt:/app/requirements.txt:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - resonant_dev_network
+    command: tail -f /dev/null  # Keep container running for interactive testing
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_dev_data:
+    name: resonant_postgres_dev_data
+
+networks:
+  resonant_dev_network:
+    name: resonant_dev_network
+    driver: bridge

@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from .models import EmotionState, MemorySearchQuery, MemoryType
 
@@ -54,13 +54,8 @@ class MemoryUnitResponse(BaseModel):
     updated_at: datetime
     metadata: Dict[str, Any]
 
-    class Config:
-        """Pydantic model configuration"""
-        json_encoders = {
-            UUID: str,
-            datetime: lambda v: v.isoformat(),
-        }
-        use_enum_values = False
+    # Pydantic V2 handles UUID and datetime serialization automatically
+    model_config = ConfigDict(use_enum_values=False)
 
 
 class ProcessEventResponse(BaseModel):

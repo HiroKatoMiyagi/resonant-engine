@@ -16,7 +16,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 # ============================================================================
@@ -46,11 +46,7 @@ class Session(BaseModel):
     status: SessionStatus = SessionStatus.ACTIVE
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-            UUID: lambda v: str(v),
-        }
+    # Pydantic V2 handles datetime and UUID serialization automatically
 
 
 # ============================================================================
@@ -110,11 +106,7 @@ class Intent(BaseModel):
             raise ValueError("Priority must be between 0 and 10")
         return v
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-            UUID: lambda v: str(v),
-        }
+    # Pydantic V2 handles datetime and UUID serialization automatically
 
 
 # ============================================================================
@@ -168,11 +160,7 @@ class Resonance(BaseModel):
                 raise ValueError(f"Invalid agent: {agent}. Must be one of {valid_agents}")
         return [a.lower() for a in v]
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-            UUID: lambda v: str(v),
-        }
+    # Pydantic V2 handles datetime and UUID serialization automatically
 
 
 # ============================================================================
@@ -214,11 +202,7 @@ class AgentContext(BaseModel):
             raise ValueError("Version must be at least 1")
         return v
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-            UUID: lambda v: str(v),
-        }
+    # Pydantic V2 handles datetime and UUID serialization automatically
 
 
 # ============================================================================
@@ -295,11 +279,7 @@ class ChoicePoint(BaseModel):
             raise ValueError("Maximum 10 tags allowed")
         return v
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-            UUID: lambda v: str(v),
-        }
+    # Pydantic V2 handles datetime and UUID serialization automatically
 
 
 # ============================================================================
@@ -335,11 +315,7 @@ class BreathingCycle(BaseModel):
     phase_data: Dict[str, Any] = Field(default_factory=dict)
     success: Optional[bool] = None
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-            UUID: lambda v: str(v),
-        }
+    # Pydantic V2 handles datetime and UUID serialization automatically
 
 
 # ============================================================================
@@ -374,11 +350,7 @@ class Snapshot(BaseModel):
 
     tags: List[str] = Field(default_factory=list)
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-            UUID: lambda v: str(v),
-        }
+    # Pydantic V2 handles datetime and UUID serialization automatically
 
 
 # ============================================================================
@@ -405,8 +377,4 @@ class MemoryQuery(BaseModel):
     results_count: Optional[int] = None
     results_sample: Optional[Dict[str, Any]] = None
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-            UUID: lambda v: str(v),
-        }
+    # Pydantic V2 handles datetime and UUID serialization automatically

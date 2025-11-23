@@ -1,7 +1,7 @@
 # Resonant Engine 総合テスト仕様書
 
 **作成日**: 2025-11-23
-**バージョン**: 3.1（ST-API前提条件追加版）
+**バージョン**: 3.2（環境変数・Pydantic V2対応版）
 **対象環境**: 開発環境（Docker Compose）
 **テスト種別**: システムテスト / 総合テスト
 
@@ -40,6 +40,36 @@
 | トリガーの無効化 | システムの整合性を損なう |
 | 同じ仮説の繰り返し検証 | 一度否定された仮説は記録して除外 |
 | 仕様書を無視した独自判断 | 本仕様書に従うこと |
+
+---
+
+## 📋 v3.2 変更履歴
+
+### 修正済み課題（2025-11-23）
+
+| コミット | 修正内容 | 影響範囲 |
+|---------|---------|---------|
+| `23a5014` | Pydantic V2移行完了（13ファイル） | 全モデルファイル |
+| `0dd34f3` | docker-compose.ymlにDATABASE_URL/ANTHROPIC_API_KEY追加 | ST-AI, ST-MEM |
+| `7b0cee3` | pytest markers追加、Pydantic ConfigDict移行 | テスト実行 |
+| `923ad0f` | Intent model Sprint 10カラム名修正 | ST-API (intents) |
+
+### Pydantic V2移行完了
+
+以下のファイルはPydantic V2形式（`model_config = ConfigDict(...)`）に移行済み：
+
+- `bridge/contradiction/api_schemas.py`
+- `bridge/contradiction/models.py`
+- `bridge/memory/models.py`
+- `bridge/semantic_bridge/api_schemas.py`
+- `bridge/semantic_bridge/models.py`
+- `context_assembler/models.py`
+- `memory_lifecycle/models.py`
+- `memory_store/models.py`
+- `retrieval/metrics.py`, `orchestrator.py`, `query_analyzer.py`, `strategy.py`
+- `user_profile/models.py`
+
+**注意**: `class Config:`形式は非推奨。新規コードは`model_config = ConfigDict(...)`を使用すること。
 
 ---
 
@@ -144,12 +174,36 @@ async def db_pool():
 
 - [ ] Docker / Docker Composeがインストールされている
 - [ ] `.env`ファイルが正しく設定されている
-- [ ] `ANTHROPIC_API_KEY`が有効である
+- [ ] `ANTHROPIC_API_KEY`が有効である（ST-AI, ST-MEMテストに必須）
 - [ ] Dockerコンテナが起動している（`docker ps`で確認）
 - [ ] `resonant_dev`コンテナが存在する
 - [ ] **マイグレーションが実行済みである（セクション4参照）**
 
-### 3.2 コンテナ起動確認
+### 3.2 環境変数設定（v3.2更新）
+
+**docker-compose.ymlに以下の環境変数が設定済み：**
+
+| 環境変数 | 用途 | 必須テスト |
+|---------|------|----------|
+| `DATABASE_URL` | PostgreSQL接続文字列（自動構築） | ST-AI, ST-MEM |
+| `ANTHROPIC_API_KEY` | Claude API認証 | ST-AI, ST-MEM |
+
+**`.env`ファイル設定例（docker/.env）：**
+
+```bash
+# PostgreSQL設定
+POSTGRES_USER=resonant
+POSTGRES_PASSWORD=your_secure_password_here
+POSTGRES_DB=resonant_dashboard
+
+# AI統合（ST-AI, ST-MEMテストに必須）
+ANTHROPIC_API_KEY=sk-ant-api03-xxxxx
+```
+
+**注意**: `DATABASE_URL`はdocker-compose.yml内でPOSTGRES_*変数から自動構築されるため、
+`.env`ファイルでの直接設定は不要。
+
+### 3.3 コンテナ起動確認
 
 ```bash
 # コンテナ起動状態確認（必須）
@@ -158,7 +212,7 @@ docker ps | grep resonant
 # 期待される出力:
 # resonant_dev      ... Up ...
 # resonant_postgres ... Up ...
-# resonant_api      ... Up ...
+# resonant_backend  ... Up ...
 ```
 
 ---
@@ -1003,4 +1057,4 @@ async def test_example(db_pool):
 
 **テスト仕様書作成者**: Claude Code
 **最終更新**: 2025-11-23
-**バージョン**: 3.1（ST-API前提条件追加版）
+**バージョン**: 3.2（環境変数・Pydantic V2対応版）

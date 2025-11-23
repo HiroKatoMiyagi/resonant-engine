@@ -86,15 +86,10 @@ async def test_intents_endpoint_list():
     
     目的: Intent一覧エンドポイントが正常に応答することを確認
     期待結果: status=200, リストを返す
-    
-    注意: intentsエンドポイントに既知の問題がある場合はスキップ
     """
     async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.get(f"{BASE_URL}/api/intents")
-        # 500エラーの場合は実装の問題として記録
-        if response.status_code == 500:
-            pytest.skip("intentsエンドポイントで500エラー（実装の問題）")
-        assert response.status_code == 200
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         data = response.json()
         assert isinstance(data, dict)
         assert "items" in data or "total" in data

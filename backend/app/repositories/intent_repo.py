@@ -150,15 +150,17 @@ class IntentRepository(BaseRepository):
         return result is not None
 
     def _to_response(self, row) -> IntentResponse:
+        # Convert asyncpg.Record to dict to ensure all fields are accessible
+        row_dict = dict(row)
         return IntentResponse(
-            id=row['id'],
-            intent_text=row['intent_text'],
-            intent_type=row['intent_type'],
-            status=row['status'],
-            priority=row['priority'],
-            outcome=row['outcome'] if isinstance(row['outcome'], dict) else None,
-            metadata=row['metadata'] if isinstance(row['metadata'], dict) else {},
-            created_at=row['created_at'],
-            updated_at=row['updated_at'],
-            completed_at=row['completed_at']
+            id=row_dict['id'],
+            intent_text=row_dict['intent_text'],
+            intent_type=row_dict['intent_type'],
+            status=row_dict['status'],
+            priority=row_dict['priority'],
+            outcome=row_dict['outcome'] if isinstance(row_dict.get('outcome'), dict) else None,
+            metadata=row_dict['metadata'] if isinstance(row_dict.get('metadata'), dict) else {},
+            created_at=row_dict['created_at'],
+            updated_at=row_dict['updated_at'],
+            completed_at=row_dict['completed_at']
         )

@@ -1,7 +1,7 @@
 # Resonant Engine 総合テスト仕様書
 
 **作成日**: 2025-11-23
-**バージョン**: 2.1（Kiro対応版・合格基準明確化）
+**バージョン**: 3.0（マイグレーション手順追加版）
 **対象環境**: 開発環境（Docker Compose）
 **テスト種別**: システムテスト / 総合テスト
 
@@ -16,15 +16,18 @@
    docker exec resonant_dev pytest tests/system/ -v
    ```
 
-2. **既存のconftest.pyを使用すること**
+2. **テスト実行前にマイグレーション確認を行うこと**
+   - セクション4「マイグレーション確認・実行手順」に従う
+
+3. **既存のconftest.pyを使用すること**
    - `tests/conftest.py`に`db_pool`フィクスチャが定義済み
    - **新たにconftest.pyを作成してはならない**
 
-3. **エラー発生時は根本原因を調査すること**
+4. **エラー発生時は根本原因を調査すること**
    - 表面的な対処（パスワード変更、ハードコードなど）は禁止
    - 必ず「なぜこのエラーが発生するのか」を追求
 
-4. **既存の動作しているテストを参考にすること**
+5. **既存の動作しているテストを参考にすること**
    - `tests/bridge/`配下のテストが参考になる
 
 ### 禁止事項（MUST NOT）
@@ -45,11 +48,12 @@
 1. [テスト概要](#1-テスト概要)
 2. [テスト環境](#2-テスト環境)
 3. [前提条件](#3-前提条件)
-4. [実行手順（ステップバイステップ）](#4-実行手順ステップバイステップ)
-5. [テスト項目一覧](#5-テスト項目一覧)
-6. [テストケース詳細](#6-テストケース詳細)
-7. [エラー対処チェックリスト](#7-エラー対処チェックリスト)
-8. [合否判定基準](#8-合否判定基準)
+4. [マイグレーション確認・実行手順](#4-マイグレーション確認実行手順)
+5. [テスト実行手順](#5-テスト実行手順)
+6. [テスト項目一覧](#6-テスト項目一覧)
+7. [テストケース詳細](#7-テストケース詳細)
+8. [エラー対処チェックリスト](#8-エラー対処チェックリスト)
+9. [合否判定基準](#9-合否判定基準)
 
 ---
 
@@ -143,6 +147,7 @@ async def db_pool():
 - [ ] `ANTHROPIC_API_KEY`が有効である
 - [ ] Dockerコンテナが起動している（`docker ps`で確認）
 - [ ] `resonant_dev`コンテナが存在する
+- [ ] **マイグレーションが実行済みである（セクション4参照）**
 
 ### 3.2 コンテナ起動確認
 
@@ -156,10 +161,134 @@ docker ps | grep resonant
 # resonant_api      ... Up ...
 ```
 
-### 3.3 データベース接続確認
+---
+
+## 4. マイグレーション確認・実行手順
+
+### 4.1 マイグレーション必要性の判断方法
+
+**以下のコマンドを実行して、マイグレーションが必要か判断すること。**
 
 ```bash
-# Dockerコンテナ内からDB接続確認
+# Docker内でマイグレーション状態を確認
+docker exec resonant_postgres psql -U resonant -d postgres -c "
+SELECT 'テーブル/拡張' as type, name, '存在する' as status FROM (
+    SELECT 'pgvector拡張' as name, EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'vector') as exists
+    UNION ALL SELECT 'intents', EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'intents')
+    UNION ALL SELECT 'messages', EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'messages')
+    UNION ALL SELECT 'contradictions', EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'contradictions')
+    UNION ALL SELECT 'semantic_memories', EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'semantic_memories')
+    UNION ALL SELECT 'choice_points', EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'choice_points')
+    UNION ALL SELECT 'user_profiles', EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'user_profiles')
+    UNION ALL SELECT 'sessions', EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'sessions')
+) t WHERE exists = true;
+"
+```
+
+### 4.2 マイグレーションファイル一覧
+
+| 順序 | ファイル名 | Sprint | 作成されるテーブル/拡張 |
+|-----|-----------|--------|----------------------|
+| 1 | `init.sql` | Sprint 1 | messages, specifications, intents, notifications |
+| 2 | `002_intent_notify.sql` | Sprint 4 | トリガー: notify_intent_created, notify_intent_status_changed |
+| 3 | `003_message_notify.sql` | Sprint 4 | トリガー: notify_message_created |
+| 4 | `004_claude_code_tables.sql` | Sprint 4.5 | claude_code_sessions, claude_code_executions |
+| 5 | `005_user_profile_tables.sql` | Sprint 8 | user_profiles, cognitive_traits, family_members, user_goals, resonant_concepts |
+| 6 | `006_choice_points_initial.sql` | Sprint 8 | choice_points |
+| 7 | `006_memory_lifecycle_tables.sql` | Sprint 9 | **pgvector拡張**, semantic_memories, memory_archive, memory_lifecycle_log |
+| 8 | `007_choice_preservation_completion.sql` | Sprint 10 | choice_pointsの拡張 |
+| 9 | `008_contradiction_detection.sql` | Sprint 11 | contradictions, intent_relations |
+| 10 | `008_intents_migration.sql` | Sprint 10 | intentsテーブルの変更（description→intent_text等） |
+
+### 4.3 マイグレーション実行手順
+
+**マイグレーションが必要と判断された場合のみ実行すること。**
+
+```bash
+# Step 1: 基本テーブルの確認（init.sqlは通常Docker起動時に実行済み）
+docker exec resonant_postgres psql -U resonant -d postgres -c "\dt"
+
+# Step 2: 不足しているマイグレーションを順番に実行
+# ※ 既に実行済みのファイルはスキップしてよい（IF NOT EXISTSで冪等性あり）
+
+# Sprint 4: Intent通知トリガー
+docker exec resonant_postgres psql -U resonant -d postgres -f /docker-entrypoint-initdb.d/002_intent_notify.sql
+
+# Sprint 4: Message通知トリガー
+docker exec resonant_postgres psql -U resonant -d postgres -f /docker-entrypoint-initdb.d/003_message_notify.sql
+
+# Sprint 4.5: Claude Code統合
+docker exec resonant_postgres psql -U resonant -d postgres -f /docker-entrypoint-initdb.d/004_claude_code_tables.sql
+
+# Sprint 8: ユーザープロフィール
+docker exec resonant_postgres psql -U resonant -d postgres -f /docker-entrypoint-initdb.d/005_user_profile_tables.sql
+
+# Sprint 8: Choice Points初期
+docker exec resonant_postgres psql -U resonant -d postgres -f /docker-entrypoint-initdb.d/006_choice_points_initial.sql
+
+# Sprint 9: Memory Lifecycle（pgvector + semantic_memories）★重要★
+docker exec resonant_postgres psql -U resonant -d postgres -f /docker-entrypoint-initdb.d/006_memory_lifecycle_tables.sql
+
+# Sprint 10: Choice Points拡張
+docker exec resonant_postgres psql -U resonant -d postgres -f /docker-entrypoint-initdb.d/007_choice_preservation_completion.sql
+
+# Sprint 11: 矛盾検出
+docker exec resonant_postgres psql -U resonant -d postgres -f /docker-entrypoint-initdb.d/008_contradiction_detection.sql
+
+# Sprint 10: Intentsテーブル変更（トリガー修正も必要）
+docker exec resonant_postgres psql -U resonant -d postgres -f /docker-entrypoint-initdb.d/008_intents_migration.sql
+```
+
+### 4.4 トリガー修正（intents_migration実行後に必要）
+
+**intentsテーブルの`description`カラムが`intent_text`にリネームされた場合、トリガー関数も修正が必要。**
+
+```bash
+# トリガー関数の修正
+docker exec resonant_postgres psql -U resonant -d postgres -c "
+CREATE OR REPLACE FUNCTION notify_intent_created()
+RETURNS TRIGGER AS \$\$
+BEGIN
+    PERFORM pg_notify(
+        'intent_created',
+        json_build_object(
+            'id', NEW.id::text,
+            'intent_text', substring(COALESCE(NEW.intent_text, ''), 1, 100),
+            'priority', NEW.priority
+        )::text
+    );
+    RETURN NEW;
+END;
+\$\$ LANGUAGE plpgsql;
+"
+```
+
+### 4.5 マイグレーション完了確認
+
+```bash
+# 全テーブル一覧
+docker exec resonant_postgres psql -U resonant -d postgres -c "\dt"
+
+# pgvector拡張確認
+docker exec resonant_postgres psql -U resonant -d postgres -c "SELECT extname FROM pg_extension WHERE extname = 'vector';"
+
+# 主要テーブルのカラム確認
+docker exec resonant_postgres psql -U resonant -d postgres -c "\d intents"
+docker exec resonant_postgres psql -U resonant -d postgres -c "\d semantic_memories"
+docker exec resonant_postgres psql -U resonant -d postgres -c "\d contradictions"
+```
+
+---
+
+## 5. テスト実行手順
+
+### Phase 1: 環境確認（5分）
+
+```bash
+# Step 1.1: コンテナ起動確認
+docker ps | grep resonant
+
+# Step 1.2: DB接続テスト
 docker exec resonant_dev python -c "
 import asyncio
 import asyncpg
@@ -174,59 +303,30 @@ async def test():
     await pool.close()
 asyncio.run(test())
 "
-```
-
----
-
-## 4. 実行手順（ステップバイステップ）
-
-### Phase 1: 環境確認（5分）
-
-```bash
-# Step 1.1: コンテナ起動確認
-docker ps | grep resonant
-
-# Step 1.2: DB接続テスト（上記のワンライナー実行）
 
 # Step 1.3: 既存テストが動作することを確認
 docker exec resonant_dev pytest tests/bridge/ -v --collect-only
 ```
 
-### Phase 2: テストファイル作成
+### Phase 2: マイグレーション確認
 
 ```bash
-# Step 2.1: ディレクトリ作成（存在しない場合のみ）
+# Step 2.1: マイグレーション状態確認（セクション4.1のコマンド実行）
+# Step 2.2: 必要に応じてマイグレーション実行（セクション4.3）
+# Step 2.3: 完了確認（セクション4.5）
+```
+
+### Phase 3: テストファイル作成
+
+```bash
+# Step 3.1: ディレクトリ作成（存在しない場合のみ）
 docker exec resonant_dev mkdir -p tests/system
 
-# Step 2.2: __init__.py作成
+# Step 3.2: __init__.py作成
 docker exec resonant_dev touch tests/system/__init__.py
 ```
 
 **重要**: `tests/system/conftest.py`は作成しない。`tests/conftest.py`の`db_pool`フィクスチャを使用する。
-
-### Phase 3: テストコード作成
-
-各テストファイルを作成する際の注意点：
-
-1. **db_poolフィクスチャを使用する**
-   ```python
-   @pytest.mark.asyncio
-   async def test_example(db_pool):  # db_poolはtests/conftest.pyから
-       async with db_pool.acquire() as conn:
-           result = await conn.fetchval("SELECT 1")
-           assert result == 1
-   ```
-
-2. **独自のDB接続を作成しない**
-   ```python
-   # ❌ 禁止
-   pool = await asyncpg.create_pool(dsn="postgresql://...")
-
-   # ✅ 正しい
-   async def test_something(db_pool):
-       async with db_pool.acquire() as conn:
-           ...
-   ```
 
 ### Phase 4: テスト実行
 
@@ -243,9 +343,9 @@ docker exec resonant_dev pytest tests/system/ -v --tb=long
 
 ---
 
-## 5. テスト項目一覧
+## 6. テスト項目一覧
 
-### 5.1 テストカテゴリ
+### 6.1 テストカテゴリ
 
 | ID | カテゴリ | 必須 | 条件付き | 優先度 |
 |----|---------|-----|---------|-------|
@@ -261,28 +361,30 @@ docker exec resonant_dev pytest tests/system/ -v --tb=long
 
 **総テスト項目数: 47必須 + 2条件付き = 49**
 
-### 5.2 テスト分類の定義
+### 6.2 テスト分類の定義
 
 | 分類 | 定義 | スキップ時の扱い |
 |-----|------|----------------|
 | **必須** | 常に実行され、合格が必要 | スキップ不可。失敗扱い |
 | **条件付き** | 前提条件を満たす場合のみ実行 | 前提条件未達成時はスキップ可。合格率の分母から除外 |
 
-### 5.3 条件付きテスト一覧
+### 6.3 条件付きテスト一覧
 
-| テストID | テスト名 | 前提条件 |
-|---------|---------|---------|
-| ST-DB-002 | pgvector拡張確認 | pgvector拡張がインストールされている |
-| ST-DB-005 | memoriesテーブル・ベクトル検索 | memoriesテーブルが存在する |
+| テストID | テスト名 | 前提条件 | マイグレーション |
+|---------|---------|---------|----------------|
+| ST-DB-002 | pgvector拡張確認 | pgvector拡張がインストールされている | Sprint 9 (006_memory_lifecycle_tables.sql) |
+| ST-DB-005 | semantic_memoriesテーブル・ベクトル検索 | semantic_memoriesテーブルが存在する | Sprint 9 (006_memory_lifecycle_tables.sql) |
 
-**重要**: 条件付きテストがスキップされた場合、その機能は**未実装**として記録すること。
-スキップは「合格」ではなく「未テスト」である。
+**重要**:
+- 条件付きテストがスキップされた場合、その機能は**未実装（マイグレーション未実行）**として記録すること
+- スキップは「合格」ではなく「未テスト」である
+- **マイグレーションを実行すれば条件付きテストも実行可能になる**
 
 ---
 
-## 6. テストケース詳細
+## 7. テストケース詳細
 
-### 6.1 データベース接続テスト (ST-DB)
+### 7.1 データベース接続テスト (ST-DB)
 
 #### ST-DB-001: PostgreSQL接続確認
 
@@ -316,6 +418,7 @@ async def test_postgres_connection(db_pool):
 |-----|------|
 | **分類** | 条件付き |
 | **前提条件** | pgvector拡張がインストールされている |
+| **マイグレーション** | Sprint 9: `006_memory_lifecycle_tables.sql` |
 | **スキップ条件** | 拡張が未インストールの場合 |
 
 ```python
@@ -324,6 +427,7 @@ async def test_pgvector_extension(db_pool):
     """ST-DB-002: pgvector拡張確認【条件付き】
 
     前提条件: pgvector拡張がインストールされていること
+    マイグレーション: Sprint 9 (006_memory_lifecycle_tables.sql)
     スキップ条件: 拡張が未インストールの場合
     """
     async with db_pool.acquire() as conn:
@@ -332,7 +436,10 @@ async def test_pgvector_extension(db_pool):
             "SELECT extname FROM pg_extension WHERE extname = 'vector'"
         )
         if result is None:
-            pytest.skip("pgvector拡張が未インストールのためスキップ（条件付きテスト）")
+            pytest.skip(
+                "pgvector拡張が未インストールのためスキップ（条件付きテスト）。"
+                "Sprint 9マイグレーション(006_memory_lifecycle_tables.sql)を実行してください。"
+            )
 
         # vector型テスト
         await conn.execute("SELECT '[1,2,3]'::vector")
@@ -345,7 +452,8 @@ async def test_pgvector_extension(db_pool):
 async def test_intents_crud(db_pool):
     """ST-DB-003: IntentsテーブルCRUD
 
-    NOTE: トリガーが定義されている場合、必要なカラムに適切な値を設定すること
+    NOTE: Sprint 10マイグレーション後は description → intent_text に変更
+    トリガーが定義されている場合、必要なカラムに適切な値を設定すること
     """
     import uuid
     import json
@@ -353,24 +461,28 @@ async def test_intents_crud(db_pool):
     test_id = uuid.uuid4()
 
     async with db_pool.acquire() as conn:
-        # テーブル構造を事前に確認
+        # テーブル構造を事前に確認（Sprint 10マイグレーション対応）
         columns = await conn.fetch("""
             SELECT column_name FROM information_schema.columns
             WHERE table_name = 'intents'
         """)
         column_names = [c['column_name'] for c in columns]
 
-        # INSERT（必要なカラムを確認してから実行）
-        if 'intent_text' in column_names:
-            await conn.execute("""
-                INSERT INTO intents (id, source, type, data, status, user_id, content, intent_text)
-                VALUES ($1, 'KANA', 'FEATURE_REQUEST', $2, 'PENDING', 'test_user', 'Test intent', 'Test intent')
-            """, test_id, json.dumps({"test": True}))
+        # Sprint 10マイグレーション後: intent_text を使用
+        # Sprint 10マイグレーション前: description を使用
+        text_column = 'intent_text' if 'intent_text' in column_names else 'description'
+
+        # INSERT（カラム名を動的に決定）
+        if text_column == 'intent_text':
+            await conn.execute(f"""
+                INSERT INTO intents (id, {text_column}, intent_type, status, priority, metadata)
+                VALUES ($1, $2, $3, $4, $5, $6)
+            """, test_id, 'Test intent', 'FEATURE_REQUEST', 'pending', 0, json.dumps({"test": True}))
         else:
-            await conn.execute("""
-                INSERT INTO intents (id, source, type, data, status, user_id, content)
-                VALUES ($1, 'KANA', 'FEATURE_REQUEST', $2, 'PENDING', 'test_user', 'Test intent')
-            """, test_id, json.dumps({"test": True}))
+            await conn.execute(f"""
+                INSERT INTO intents (id, {text_column}, intent_type, status, priority, metadata)
+                VALUES ($1, $2, $3, $4, $5, $6)
+            """, test_id, 'Test intent', 'FEATURE_REQUEST', 'pending', 0, json.dumps({"test": True}))
 
         # SELECT
         row = await conn.fetchrow(
@@ -378,11 +490,11 @@ async def test_intents_crud(db_pool):
             test_id
         )
         assert row is not None
-        assert row['status'] == 'PENDING'
+        assert row['status'] == 'pending'
 
         # UPDATE
         await conn.execute(
-            "UPDATE intents SET status = 'COMPLETED' WHERE id = $1",
+            "UPDATE intents SET status = 'completed' WHERE id = $1",
             test_id
         )
 
@@ -398,7 +510,10 @@ async def test_intents_crud(db_pool):
 ```python
 @pytest.mark.asyncio
 async def test_contradictions_table(db_pool):
-    """ST-DB-004: contradictionsテーブル操作"""
+    """ST-DB-004: contradictionsテーブル操作
+
+    マイグレーション: Sprint 11 (008_contradiction_detection.sql)
+    """
     async with db_pool.acquire() as conn:
         # テーブル存在確認
         exists = await conn.fetchval("""
@@ -407,7 +522,10 @@ async def test_contradictions_table(db_pool):
                 WHERE table_name = 'contradictions'
             )
         """)
-        assert exists is True, "contradictionsテーブルが存在しません"
+        assert exists is True, (
+            "contradictionsテーブルが存在しません。"
+            "Sprint 11マイグレーション(008_contradiction_detection.sql)を実行してください。"
+        )
 
         # カラム確認
         columns = await conn.fetch("""
@@ -420,45 +538,54 @@ async def test_contradictions_table(db_pool):
         assert 'resolution_status' in column_names
 ```
 
-#### ST-DB-005: memoriesテーブル・ベクトル検索【条件付き】
+#### ST-DB-005: semantic_memoriesテーブル・ベクトル検索【条件付き】
 
 | 項目 | 内容 |
 |-----|------|
 | **分類** | 条件付き |
-| **前提条件** | memoriesテーブルが存在する |
+| **前提条件** | semantic_memoriesテーブルが存在する |
+| **マイグレーション** | Sprint 9: `006_memory_lifecycle_tables.sql` |
 | **スキップ条件** | テーブルが未作成の場合 |
+
+**注意**: 元の仕様書では`memories`テーブルでしたが、正しくは`semantic_memories`テーブルです。
 
 ```python
 @pytest.mark.asyncio
 async def test_vector_similarity_search(db_pool):
     """ST-DB-005: ベクトル類似度検索【条件付き】
 
-    前提条件: memoriesテーブルが存在すること
+    前提条件: semantic_memoriesテーブルが存在すること
+    マイグレーション: Sprint 9 (006_memory_lifecycle_tables.sql)
     スキップ条件: テーブルが未作成の場合
+
+    NOTE: テーブル名は memories ではなく semantic_memories
     """
     async with db_pool.acquire() as conn:
         # テーブル存在確認（スキップ判定）
         exists = await conn.fetchval("""
             SELECT EXISTS (
                 SELECT FROM information_schema.tables
-                WHERE table_name = 'memories'
+                WHERE table_name = 'semantic_memories'
             )
         """)
 
         if not exists:
-            pytest.skip("memoriesテーブルが未作成のためスキップ（条件付きテスト）")
+            pytest.skip(
+                "semantic_memoriesテーブルが未作成のためスキップ（条件付きテスト）。"
+                "Sprint 9マイグレーション(006_memory_lifecycle_tables.sql)を実行してください。"
+            )
 
         # テスト用メモリ挿入（1536次元のダミーベクトル）
         test_vector = [0.1] * 1536
         await conn.execute("""
-            INSERT INTO memories (content, embedding, memory_type, user_id)
-            VALUES ('Test memory content', $1::vector, 'WORKING', 'test_user')
+            INSERT INTO semantic_memories (content, embedding, memory_type, user_id)
+            VALUES ('Test memory content', $1::vector, 'working', 'test_user')
         """, str(test_vector))
 
         # 類似検索
         results = await conn.fetch("""
             SELECT content, embedding <-> $1::vector AS distance
-            FROM memories
+            FROM semantic_memories
             WHERE user_id = 'test_user'
             ORDER BY distance
             LIMIT 5
@@ -468,13 +595,13 @@ async def test_vector_similarity_search(db_pool):
 
         # クリーンアップ
         await conn.execute(
-            "DELETE FROM memories WHERE user_id = 'test_user'"
+            "DELETE FROM semantic_memories WHERE user_id = 'test_user'"
         )
 ```
 
 ---
 
-### 6.2 REST API テスト (ST-API)
+### 7.2 REST API テスト (ST-API)
 
 #### 共通設定
 
@@ -503,40 +630,11 @@ async def test_health_check():
         assert data.get("status") == "ok" or "healthy" in str(data).lower()
 ```
 
-#### ST-API-002〜008（以下省略。パターンは同様）
-
-各APIテストも`db_pool`フィクスチャを使用し、Docker内で実行する。
-
 ---
 
-### 6.3 BridgeSetパイプラインテスト (ST-BRIDGE)
+## 8. エラー対処チェックリスト
 
-詳細は元の仕様書を参照。ポイント：
-
-- `create_bridge_set()`を使用する
-- エラー発生時は監査ログを確認
-- モック使用が許可されるケースを明記
-
----
-
-### 6.4 Claude API (Kana) テスト (ST-AI)
-
-詳細は元の仕様書を参照。ポイント：
-
-- `ANTHROPIC_API_KEY`環境変数が必須
-- Docker内から外部APIを呼び出す
-
----
-
-### 6.5〜6.9 その他のテスト
-
-詳細は元の仕様書を参照。
-
----
-
-## 7. エラー対処チェックリスト
-
-### 7.1 パスワード認証エラー (password authentication failed)
+### 8.1 パスワード認証エラー (password authentication failed)
 
 **症状**: `password authentication failed for user "resonant"`
 
@@ -567,7 +665,7 @@ async def test_health_check():
 - URLエンコードを試す
 - pg_hba.confの変更を提案する
 
-### 7.2 トリガーエラー
+### 8.2 トリガーエラー
 
 **症状**: `trigger function ... does not exist` または `column does not exist`
 
@@ -575,21 +673,36 @@ async def test_health_check():
 
 1. [ ] **トリガー関数の確認**:
    ```bash
-   docker exec resonant_dev psql -h postgres -U resonant -d postgres -c "\df"
+   docker exec resonant_postgres psql -U resonant -d postgres -c "\df notify*"
    ```
 
 2. [ ] **テーブル構造の確認**:
    ```bash
-   docker exec resonant_dev psql -h postgres -U resonant -d postgres -c "\d intents"
+   docker exec resonant_postgres psql -U resonant -d postgres -c "\d intents"
    ```
 
-3. [ ] **トリガーが参照するカラムが存在するか確認**
+3. [ ] **Sprint 10マイグレーション後の場合**: トリガー関数が`description`を参照している場合は、セクション4.4の修正を実行
 
 **やってはいけないこと**:
 - トリガーを無効化する
 - カラムを削除する
 
-### 7.3 モジュールインポートエラー
+### 8.3 テーブルが存在しないエラー
+
+**症状**: `relation "xxx" does not exist`
+
+**対処手順**:
+
+1. [ ] **テーブル一覧確認**:
+   ```bash
+   docker exec resonant_postgres psql -U resonant -d postgres -c "\dt"
+   ```
+
+2. [ ] **必要なマイグレーションを特定**: セクション4.2の一覧を参照
+
+3. [ ] **マイグレーション実行**: セクション4.3に従う
+
+### 8.4 モジュールインポートエラー
 
 **症状**: `ModuleNotFoundError: No module named 'xxx'`
 
@@ -603,7 +716,7 @@ async def test_health_check():
 
 3. [ ] **tests/conftest.pyがプロジェクトルートをpathに追加しているか確認**
 
-### 7.4 テストが見つからない
+### 8.5 テストが見つからない
 
 **症状**: `no tests ran` または `collected 0 items`
 
@@ -616,9 +729,9 @@ async def test_health_check():
 
 ---
 
-## 8. 合否判定基準
+## 9. 合否判定基準
 
-### 8.1 合格率の計算方法
+### 9.1 合格率の計算方法
 
 ```
 合格率 = 合格したテスト数 / (必須テスト数 + 実行された条件付きテスト数)
@@ -629,7 +742,7 @@ async def test_health_check():
 - **条件付きテスト**: 前提条件が満たされない場合はスキップ可能。分母から除外
 - **スキップ ≠ 合格**: スキップされたテストは「未テスト」として報告書に明記
 
-### 8.2 必須合格条件
+### 9.2 必須合格条件
 
 | カテゴリ | 必須テスト数 | 条件付き | 必須合格率 | 備考 |
 |---------|------------|---------|----------|------|
@@ -645,7 +758,7 @@ async def test_health_check():
 - 必須3件がすべて合格 → **100%合格**（条件付きがスキップでも可）
 - 必須3件のうち1件が失敗 → **66.7%合格**（不合格）
 
-### 8.3 推奨合格条件
+### 9.3 推奨合格条件
 
 | カテゴリ | 推奨合格率 |
 |---------|----------|
@@ -654,7 +767,7 @@ async def test_health_check():
 | ST-CONTRA (矛盾検出) | 90% |
 | ST-RT (リアルタイム) | 80% |
 
-### 8.4 総合判定
+### 9.4 総合判定
 
 | 判定 | 条件 |
 |-----|------|
@@ -662,16 +775,18 @@ async def test_health_check():
 | **条件付き合格** | 必須合格条件を満たし、推奨条件の70%以上を満たす |
 | **不合格** | 必須合格条件を1つでも満たさない |
 
-### 8.5 報告書の記載要件
+### 9.5 報告書の記載要件
 
 テスト結果報告書には以下を明記すること：
 
 ```
 ST-DBカテゴリ結果:
 - 必須テスト: 3/3 合格 (100%)
-- 条件付きテスト: 0/2 実行 (pgvector未インストール, memoriesテーブル未作成)
+- 条件付きテスト: 0/2 実行
+  - ST-DB-002: スキップ（pgvector未インストール - Sprint 9マイグレーション未実行）
+  - ST-DB-005: スキップ（semantic_memoriesテーブル未作成 - Sprint 9マイグレーション未実行）
 - 判定: 合格（必須テスト100%達成）
-- 注記: pgvectorとmemoriesは未実装のため未テスト
+- 推奨対応: Sprint 9マイグレーションを実行してpgvector機能を有効化
 ```
 
 **スキップを「完了」と報告してはならない。**
@@ -713,6 +828,9 @@ asyncio.run(t())
 # テーブル一覧
 docker exec resonant_postgres psql -U resonant -d postgres -c "\dt"
 
+# pgvector拡張確認
+docker exec resonant_postgres psql -U resonant -d postgres -c "SELECT extname FROM pg_extension WHERE extname = 'vector';"
+
 # 環境変数確認
 docker exec resonant_dev env | grep -E "(POSTGRES|ANTHROPIC)"
 ```
@@ -738,6 +856,43 @@ async def test_example(db_pool):
 
 ---
 
+## 付録B: Sprint別マイグレーション詳細
+
+### Sprint 1: 基本テーブル
+- **ファイル**: `init.sql`
+- **テーブル**: messages, specifications, intents, notifications
+- **実行**: Docker起動時に自動実行
+
+### Sprint 4: Intent通知
+- **ファイル**: `002_intent_notify.sql`, `003_message_notify.sql`
+- **内容**: LISTEN/NOTIFYトリガー
+
+### Sprint 4.5: Claude Code統合
+- **ファイル**: `004_claude_code_tables.sql`
+- **テーブル**: claude_code_sessions, claude_code_executions
+
+### Sprint 8: ユーザープロフィール
+- **ファイル**: `005_user_profile_tables.sql`, `006_choice_points_initial.sql`
+- **テーブル**: user_profiles, cognitive_traits, family_members, user_goals, resonant_concepts, choice_points
+
+### Sprint 9: Memory Lifecycle（重要）
+- **ファイル**: `006_memory_lifecycle_tables.sql`
+- **内容**:
+  - `CREATE EXTENSION IF NOT EXISTS vector;` (pgvector)
+  - semantic_memories, memory_archive, memory_lifecycle_log
+
+### Sprint 10: Choice Preservation & Intentsマイグレーション
+- **ファイル**: `007_choice_preservation_completion.sql`, `008_intents_migration.sql`
+- **内容**:
+  - choice_points拡張
+  - intentsテーブル: description→intent_text, result→outcome, processed_at→completed_at
+
+### Sprint 11: 矛盾検出
+- **ファイル**: `008_contradiction_detection.sql`
+- **テーブル**: contradictions, intent_relations
+
+---
+
 **テスト仕様書作成者**: Claude Code
 **最終更新**: 2025-11-23
-**バージョン**: 2.1（Kiro対応版・合格基準明確化）
+**バージョン**: 3.0（マイグレーション手順追加版）

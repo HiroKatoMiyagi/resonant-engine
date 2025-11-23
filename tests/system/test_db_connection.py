@@ -13,7 +13,6 @@ from datetime import datetime, timezone
 
 
 @pytest.mark.asyncio
-@pytest.mark.db
 async def test_postgres_connection(db_pool):
     """
     ST-DB-001: PostgreSQL接続確認
@@ -27,7 +26,6 @@ async def test_postgres_connection(db_pool):
 
 
 @pytest.mark.asyncio
-@pytest.mark.db
 async def test_pgvector_extension(db_pool):
     """
     ST-DB-002: pgvector拡張確認
@@ -47,7 +45,6 @@ async def test_pgvector_extension(db_pool):
 
 
 @pytest.mark.asyncio
-@pytest.mark.db
 async def test_intents_crud(db_pool):
     """
     ST-DB-003: Intentsテーブル操作
@@ -103,7 +100,6 @@ async def test_intents_crud(db_pool):
 
 
 @pytest.mark.asyncio
-@pytest.mark.db
 async def test_contradictions_table(db_pool):
     """
     ST-DB-004: contradictionsテーブル操作
@@ -139,7 +135,6 @@ async def test_contradictions_table(db_pool):
 
 
 @pytest.mark.asyncio
-@pytest.mark.db
 async def test_vector_similarity_search(db_pool):
     """
     ST-DB-005: semantic_memoriesテーブル・ベクトル検索

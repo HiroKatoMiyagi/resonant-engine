@@ -8,6 +8,7 @@ import sys
 import os
 from pathlib import Path
 import pytest
+import pytest_asyncio
 import asyncpg
 
 # Add project root to path at start of tests
@@ -16,7 +17,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 
-@pytest.fixture(scope="function")
+@pytest_asyncio.fixture(scope="function")
 async def db_pool():
     """
     Create a PostgreSQL connection pool for testing

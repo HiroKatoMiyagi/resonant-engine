@@ -38,8 +38,8 @@ async def test_contradiction_models():
     assert Contradiction is not None
     assert IntentRelation is not None
     
-    # 基本的なフィールドの確認
-    assert hasattr(Contradiction, '__fields__')
+    # 基本的なフィールドの確認（Pydantic V2対応）
+    assert hasattr(Contradiction, 'model_fields')
 
 
 @pytest.mark.asyncio

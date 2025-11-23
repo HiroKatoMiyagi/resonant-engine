@@ -1,7 +1,7 @@
 # Resonant Engine 総合テスト仕様書
 
 **作成日**: 2025-11-23
-**バージョン**: 3.0（マイグレーション手順追加版）
+**バージョン**: 3.1（ST-API前提条件追加版）
 **対象環境**: 開発環境（Docker Compose）
 **テスト種別**: システムテスト / 総合テスト
 
@@ -603,18 +603,73 @@ async def test_vector_similarity_search(db_pool):
 
 ### 7.2 REST API テスト (ST-API)
 
+#### ST-API 前提条件（MUST CHECK）
+
+**ST-APIテストを実行する前に、以下を確認・実行すること。**
+
+##### 1. 使用しているDocker Compose構成の確認
+
+| 構成ファイル | APIサーバー | テスト方法 |
+|-------------|------------|-----------|
+| `docker/docker-compose.yml`（本番用） | `resonant_backend`コンテナ（自動起動） | Docker内から`backend:8000`に接続 |
+| `docker-compose.dev.yml`（開発用） | なし（手動起動必要） | 手動でuvicorn起動後、`localhost:8000`に接続 |
+
+##### 2. APIサーバー起動確認コマンド
+
+```bash
+# 本番用構成の場合
+docker ps | grep resonant_backend
+# → "resonant_backend ... Up ..." が表示されればOK
+
+# 開発用構成の場合
+curl -s http://localhost:8000/health
+# → {"status":"healthy",...} が返ればOK
+```
+
+##### 3. 開発用構成（docker-compose.dev.yml）でのAPIサーバー起動手順
+
+**開発用構成を使用している場合のみ実行。本番用構成では不要。**
+
+```bash
+# Step 1: 依存関係のインストール確認
+docker exec resonant_dev pip list | grep pydantic-settings
+
+# 依存関係が不足している場合:
+docker exec resonant_dev pip install -r /app/backend/requirements.txt
+
+# Step 2: APIサーバーをバックグラウンドで起動
+docker exec -d resonant_dev bash -c "cd /app/backend && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+# Step 3: 起動確認（数秒待ってから実行）
+sleep 3 && curl -s http://localhost:8000/health
+```
+
+##### 4. APIエンドポイントの決定
+
+| 環境 | BASE_URL |
+|-----|----------|
+| 本番用構成（resonant_devから） | `http://backend:8000` |
+| 本番用構成（ローカルから） | `http://localhost:8000` |
+| 開発用構成（resonant_devから） | `http://localhost:8000` |
+| 開発用構成（ローカルから） | `http://localhost:8000` |
+
+**重要**: テストコード内のBASE_URLは使用している構成に合わせて調整すること。
+
 #### 共通設定
 
 ```python
 # tests/system/test_api.py
 import httpx
 import pytest
+import os
 
-# Docker内からAPIに接続する場合のベースURL
-# resonant_apiはDockerサービス名
-BASE_URL = "http://resonant_api:8000"
+# 環境変数またはデフォルト値からBASE_URLを決定
+# 本番用構成: backend、開発用構成: localhost
+BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
-# 注意: Dockerコンテナ外からアクセスする場合は http://localhost:8000
+# 注意:
+# - 本番用構成でresonant_devコンテナ内から実行: http://backend:8000
+# - 開発用構成またはローカルから実行: http://localhost:8000
 ```
 
 #### ST-API-001: ヘルスチェックエンドポイント
@@ -622,12 +677,24 @@ BASE_URL = "http://resonant_api:8000"
 ```python
 @pytest.mark.asyncio
 async def test_health_check():
-    """ST-API-001: ヘルスチェック"""
-    async with httpx.AsyncClient() as client:
-        response = await client.get(f"{BASE_URL}/health")
+    """ST-API-001: ヘルスチェック
+
+    前提条件: APIサーバーが起動していること
+    - 本番用構成: resonant_backendコンテナが起動
+    - 開発用構成: uvicornを手動起動
+    """
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            response = await client.get(f"{BASE_URL}/health")
+        except httpx.ConnectError as e:
+            pytest.fail(
+                f"APIサーバーに接続できません ({BASE_URL})。"
+                "ST-API前提条件を確認してください。"
+                f"エラー: {e}"
+            )
         assert response.status_code == 200
         data = response.json()
-        assert data.get("status") == "ok" or "healthy" in str(data).lower()
+        assert data.get("status") == "healthy" or data.get("status") == "ok"
 ```
 
 ---
@@ -726,6 +793,47 @@ async def test_health_check():
 2. [ ] **関数名が`test_`で始まっているか確認**
 3. [ ] **`pytest.mark.asyncio`デコレータがあるか確認**
 4. [ ] **`__init__.py`が存在するか確認**
+
+### 8.6 APIサーバー接続エラー（ST-API固有）
+
+**症状**: `httpx.ConnectError` または `Connection refused`
+
+**対処手順**:
+
+1. [ ] **使用しているDocker Compose構成を確認**:
+   ```bash
+   # 本番用構成の場合
+   docker ps | grep resonant_backend
+
+   # 開発用構成の場合
+   docker ps | grep resonant_dev
+   ```
+
+2. [ ] **本番用構成の場合**: `resonant_backend`コンテナが起動しているか確認
+   ```bash
+   docker logs resonant_backend --tail 20
+   ```
+
+3. [ ] **開発用構成の場合**: APIサーバーを手動起動
+   ```bash
+   # 依存関係インストール
+   docker exec resonant_dev pip install -r /app/backend/requirements.txt
+
+   # APIサーバー起動
+   docker exec -d resonant_dev bash -c "cd /app/backend && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+   # 起動確認
+   sleep 3 && curl -s http://localhost:8000/health
+   ```
+
+4. [ ] **BASE_URLが正しいか確認**:
+   - 本番用構成でDocker内から: `http://backend:8000`
+   - 開発用構成またはローカルから: `http://localhost:8000`
+
+**やってはいけないこと**:
+- ST-APIテストを「後回し」にして他のカテゴリに進む
+- APIサーバーが起動していないのにテストを実行する
+- 仕様書に記載のない勝手な判断でスキップする
 
 ---
 
@@ -895,4 +1003,4 @@ async def test_example(db_pool):
 
 **テスト仕様書作成者**: Claude Code
 **最終更新**: 2025-11-23
-**バージョン**: 3.0（マイグレーション手順追加版）
+**バージョン**: 3.1（ST-API前提条件追加版）

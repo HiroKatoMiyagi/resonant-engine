@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class QueryType(str, Enum):
@@ -29,8 +29,7 @@ class TimeRange(BaseModel):
     end: Optional[datetime] = None
     relative: Optional[str] = None  # "last_week", "today", "yesterday", "this_month"
 
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
+    # Pydantic V2 handles datetime serialization automatically
 
 
 class QueryIntent(BaseModel):
@@ -42,8 +41,7 @@ class QueryIntent(BaseModel):
     source_type_hint: Optional[str] = None
     importance: float = Field(default=0.5, ge=0.0, le=1.0)
 
-    class Config:
-        use_enum_values = False
+    model_config = ConfigDict(use_enum_values=False)
 
 
 class QueryAnalyzer:

@@ -3,7 +3,7 @@
 Sprint 11: Models for detecting and tracking contradictions between intents.
 """
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
@@ -56,24 +56,23 @@ class Contradiction(BaseModel):
             raise ValueError(f"resolution_status must be one of {allowed}")
         return v
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "user_id": "hiroki",
-                "new_intent_id": "12345678-1234-5678-1234-567812345678",
-                "new_intent_content": "Use SQLite for database",
-                "conflicting_intent_id": "87654321-4321-8765-4321-876543218765",
-                "conflicting_intent_content": "Use PostgreSQL for database",
-                "contradiction_type": "tech_stack",
-                "confidence_score": 0.9,
-                "details": {
-                    "category": "database",
-                    "old_tech": "postgresql",
-                    "new_tech": "sqlite"
-                },
-                "resolution_status": "pending"
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "user_id": "hiroki",
+            "new_intent_id": "12345678-1234-5678-1234-567812345678",
+            "new_intent_content": "Use SQLite for database",
+            "conflicting_intent_id": "87654321-4321-8765-4321-876543218765",
+            "conflicting_intent_content": "Use PostgreSQL for database",
+            "contradiction_type": "tech_stack",
+            "confidence_score": 0.9,
+            "details": {
+                "category": "database",
+                "old_tech": "postgresql",
+                "new_tech": "sqlite"
+            },
+            "resolution_status": "pending"
         }
+    })
 
 
 class IntentRelation(BaseModel):
@@ -101,13 +100,12 @@ class IntentRelation(BaseModel):
             raise ValueError(f"relation_type must be one of {allowed}")
         return v
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "user_id": "hiroki",
-                "source_intent_id": "12345678-1234-5678-1234-567812345678",
-                "target_intent_id": "87654321-4321-8765-4321-876543218765",
-                "relation_type": "contradicts",
-                "similarity_score": 0.85
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "user_id": "hiroki",
+            "source_intent_id": "12345678-1234-5678-1234-567812345678",
+            "target_intent_id": "87654321-4321-8765-4321-876543218765",
+            "relation_type": "contradicts",
+            "similarity_score": 0.85
         }
+    })

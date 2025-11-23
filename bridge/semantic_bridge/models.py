@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 class MemoryType(str, Enum):
@@ -54,13 +54,8 @@ class MemoryUnit(BaseModel):
 
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        """Pydantic model configuration"""
-        json_encoders = {
-            UUID: str,
-            datetime: lambda v: v.isoformat(),
-        }
-        use_enum_values = False
+    # Pydantic V2 handles UUID and datetime serialization automatically
+    model_config = ConfigDict(use_enum_values=False)
 
 
 class EventContext(BaseModel):
@@ -82,12 +77,7 @@ class EventContext(BaseModel):
     # その他の文脈
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        """Pydantic model configuration"""
-        json_encoders = {
-            UUID: str,
-            datetime: lambda v: v.isoformat(),
-        }
+    # Pydantic V2 handles UUID and datetime serialization automatically
 
 
 class InferenceResult(BaseModel):
@@ -116,9 +106,7 @@ class TypeInferenceRule(BaseModel):
     priority: int = Field(default=0, ge=0, le=100)
     description: str
 
-    class Config:
-        """Pydantic model configuration"""
-        use_enum_values = False
+    model_config = ConfigDict(use_enum_values=False)
 
 
 class MemorySearchQuery(BaseModel):
@@ -168,9 +156,5 @@ class MemorySearchQuery(BaseModel):
                 raise ValueError("ci_level_max must be >= ci_level_min")
         return v
 
-    class Config:
-        """Pydantic model configuration"""
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-        }
-        use_enum_values = False
+    # Pydantic V2 handles datetime serialization automatically
+    model_config = ConfigDict(use_enum_values=False)

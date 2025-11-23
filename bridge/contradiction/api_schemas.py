@@ -1,6 +1,6 @@
 """API Schemas for Contradiction Detection - Sprint 11"""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from uuid import UUID
@@ -24,8 +24,7 @@ class ContradictionSchema(BaseModel):
     resolution_rationale: Optional[str] = None
     resolved_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CheckIntentRequest(BaseModel):
@@ -35,14 +34,13 @@ class CheckIntentRequest(BaseModel):
     intent_id: UUID
     intent_content: str
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "user_id": "hiroki",
-                "intent_id": "12345678-1234-5678-1234-567812345678",
-                "intent_content": "Use SQLite for database"
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "user_id": "hiroki",
+            "intent_id": "12345678-1234-5678-1234-567812345678",
+            "intent_content": "Use SQLite for database"
         }
+    })
 
 
 class ResolveContradictionRequest(BaseModel):
@@ -54,14 +52,13 @@ class ResolveContradictionRequest(BaseModel):
     resolution_rationale: str = Field(..., min_length=10)
     resolved_by: str
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "resolution_action": "policy_change",
-                "resolution_rationale": "Switching to SQLite for development simplicity",
-                "resolved_by": "hiroki"
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "resolution_action": "policy_change",
+            "resolution_rationale": "Switching to SQLite for development simplicity",
+            "resolved_by": "hiroki"
         }
+    })
 
 
 class ContradictionListResponse(BaseModel):
@@ -70,31 +67,30 @@ class ContradictionListResponse(BaseModel):
     contradictions: List[ContradictionSchema]
     count: int
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "contradictions": [
-                    {
-                        "id": "12345678-1234-5678-1234-567812345678",
-                        "user_id": "hiroki",
-                        "new_intent_id": "87654321-4321-8765-4321-876543218765",
-                        "new_intent_content": "Use SQLite database",
-                        "conflicting_intent_id": "11111111-1111-1111-1111-111111111111",
-                        "conflicting_intent_content": "Use PostgreSQL database",
-                        "contradiction_type": "tech_stack",
-                        "confidence_score": 0.9,
-                        "detected_at": "2025-11-21T10:00:00Z",
-                        "details": {
-                            "category": "database",
-                            "old_tech": "postgresql",
-                            "new_tech": "sqlite"
-                        },
-                        "resolution_status": "pending",
-                        "resolution_action": None,
-                        "resolution_rationale": None,
-                        "resolved_at": None
-                    }
-                ],
-                "count": 1
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "contradictions": [
+                {
+                    "id": "12345678-1234-5678-1234-567812345678",
+                    "user_id": "hiroki",
+                    "new_intent_id": "87654321-4321-8765-4321-876543218765",
+                    "new_intent_content": "Use SQLite database",
+                    "conflicting_intent_id": "11111111-1111-1111-1111-111111111111",
+                    "conflicting_intent_content": "Use PostgreSQL database",
+                    "contradiction_type": "tech_stack",
+                    "confidence_score": 0.9,
+                    "detected_at": "2025-11-21T10:00:00Z",
+                    "details": {
+                        "category": "database",
+                        "old_tech": "postgresql",
+                        "new_tech": "sqlite"
+                    },
+                    "resolution_status": "pending",
+                    "resolution_action": None,
+                    "resolution_rationale": None,
+                    "resolved_at": None
+                }
+            ],
+            "count": 1
         }
+    })

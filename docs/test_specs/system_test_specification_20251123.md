@@ -1,7 +1,7 @@
 # Resonant Engine 総合テスト仕様書
 
 **作成日**: 2025-11-23
-**バージョン**: 3.6（モデル名修正・既知問題対応版）
+**バージョン**: 3.7（Claude Messages API v2対応版）
 **対象環境**: 開発環境（Docker Compose）
 **テスト種別**: システムテスト / 総合テスト
 
@@ -92,6 +92,38 @@ docker exec resonant_dev env | grep -E "(DATABASE_URL|ANTHROPIC_API_KEY)"
 ---
 
 ## 📋 変更履歴
+
+### v3.7 変更点（2025-11-24）
+
+**Claude Messages API v2対応（ST-AI修正）:**
+
+Kiroの総合テストv3.5実行レポートで判明したClaude Messages API v2仕様に対応。
+
+**問題**: Claude Messages API v2では`system`ロールを`messages`配列に含められない
+- 旧API: `messages`に`{"role": "system", ...}`を含める
+- 新API: `system`パラメータとして別途渡す
+
+**解決済み**: `bridge/providers/ai/kana_ai_bridge.py`で修正適用済み
+```python
+# systemメッセージを分離してAPIに渡す
+system_content = None
+user_messages = []
+for msg in messages:
+    if msg.get("role") == "system":
+        system_content = msg.get("content")
+    else:
+        user_messages.append(msg)
+
+api_params = {"model": ..., "messages": user_messages}
+if system_content:
+    api_params["system"] = system_content
+
+response = await self._client.messages.create(**api_params)
+```
+
+**期待される効果:**
+- ST-AI-002, ST-AI-004: "Unexpected role 'system'" エラー解消
+- Claude APIとの正常な通信が可能に
 
 ### v3.6 変更点（2025-11-24）
 
@@ -1283,5 +1315,5 @@ async def test_example(db_pool):
 ---
 
 **テスト仕様書作成者**: Claude Code
-**最終更新**: 2025-11-23
-**バージョン**: 3.6（モデル名修正・既知問題対応版）
+**最終更新**: 2025-11-24
+**バージョン**: 3.7（Claude Messages API v2対応版）

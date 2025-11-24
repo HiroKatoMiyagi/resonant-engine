@@ -106,13 +106,23 @@ async def test_importance_scorer():
     
     目的: ImportanceScorerモジュールが存在し、基本機能を持つことを確認
     """
-    try:
-        from memory_lifecycle.importance_scorer import ImportanceScorer
-        scorer = ImportanceScorer()
-        assert scorer is not None
-        assert hasattr(scorer, 'calculate_importance') or hasattr(scorer, 'score')
-    except (ImportError, ModuleNotFoundError):
-        pytest.skip("ImportanceScorer module not available - Sprint 9機能が未実装")
+    import importlib.util
+    import sys
+    
+    # 絶対パスで直接インポート
+    spec = importlib.util.spec_from_file_location(
+        "memory_lifecycle_root",
+        "/app/memory_lifecycle/__init__.py"
+    )
+    memory_lifecycle = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(memory_lifecycle)
+    
+    ImportanceScorer = memory_lifecycle.ImportanceScorer
+    
+    # ImportanceScorerはpoolが必要なので、クラスの存在とメソッドの存在のみ確認
+    assert ImportanceScorer is not None
+    assert hasattr(ImportanceScorer, 'calculate_score')
+    assert hasattr(ImportanceScorer, 'apply_decay')
 
 
 @pytest.mark.asyncio
@@ -121,28 +131,47 @@ async def test_capacity_manager():
     
     目的: CapacityManagerモジュールが存在し、基本機能を持つことを確認
     """
-    try:
-        from memory_lifecycle.capacity_manager import CapacityManager
-        manager = CapacityManager(max_working_memory=100)
-        assert manager is not None
-        assert hasattr(manager, 'needs_cleanup') or hasattr(manager, 'check_capacity')
-    except (ImportError, ModuleNotFoundError):
-        pytest.skip("CapacityManager module not available - Sprint 9機能が未実装")
+    import importlib.util
+    
+    # 絶対パスで直接インポート
+    spec = importlib.util.spec_from_file_location(
+        "memory_lifecycle_root",
+        "/app/memory_lifecycle/__init__.py"
+    )
+    memory_lifecycle = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(memory_lifecycle)
+    
+    CapacityManager = memory_lifecycle.CapacityManager
+    
+    # CapacityManagerはpool, compression_service, scorerが必要なので、クラスの存在とメソッドの存在のみ確認
+    assert CapacityManager is not None
+    assert hasattr(CapacityManager, 'check_capacity')
+    assert hasattr(CapacityManager, 'auto_compress_if_needed')
 
 
 @pytest.mark.asyncio
 async def test_compression_service():
     """ST-MEM-005: CompressionService動作確認
     
-    目的: CompressionServiceモジュールが存在し、基本機能を持つことを確認
+    目的: MemoryCompressionServiceモジュールが存在し、基本機能を持つことを確認
     """
-    try:
-        from memory_lifecycle.compression_service import CompressionService
-        service = CompressionService()
-        assert service is not None
-        assert hasattr(service, 'compress_memories') or hasattr(service, 'compress')
-    except (ImportError, ModuleNotFoundError):
-        pytest.skip("CompressionService module not available - Sprint 9機能が未実装")
+    import importlib.util
+    
+    # 絶対パスで直接インポート
+    spec = importlib.util.spec_from_file_location(
+        "memory_lifecycle_root",
+        "/app/memory_lifecycle/__init__.py"
+    )
+    memory_lifecycle = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(memory_lifecycle)
+    
+    MemoryCompressionService = memory_lifecycle.MemoryCompressionService
+    
+    # MemoryCompressionServiceはpoolとapi_keyが必要なので、クラスの存在とメソッドの存在のみ確認
+    assert MemoryCompressionService is not None
+    assert hasattr(MemoryCompressionService, 'compress_memory')
+    assert hasattr(MemoryCompressionService, 'summarize_content')
+    assert hasattr(MemoryCompressionService, 'restore_from_archive')
 
 
 @pytest.mark.asyncio

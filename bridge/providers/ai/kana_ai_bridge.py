@@ -16,7 +16,7 @@ class KanaAIBridge(AIBridge):
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "claude-3-5-sonnet-20241022",
+        model: str = "claude-3-haiku-20240307",
         client: Optional[AsyncAnthropic] = None,
         context_assembler: Optional[Any] = None,  # ContextAssemblerService
     ) -> None:
@@ -69,13 +69,29 @@ class KanaAIBridge(AIBridge):
             context_metadata = None
 
         # Claude API呼び出し
+        # systemメッセージを分離
+        system_content = None
+        user_messages = []
+        
+        for msg in messages:
+            if msg.get("role") == "system":
+                system_content = msg.get("content")
+            else:
+                user_messages.append(msg)
+        
         try:
-            response = await self._client.messages.create(  # type: ignore[attr-defined]
-                model=self._model,
-                max_tokens=4096,
-                temperature=0.5,
-                messages=messages,
-            )
+            # Messages API v2: systemは別パラメータ
+            api_params = {
+                "model": self._model,
+                "max_tokens": 4096,
+                "temperature": 0.5,
+                "messages": user_messages,
+            }
+            
+            if system_content:
+                api_params["system"] = system_content
+            
+            response = await self._client.messages.create(**api_params)  # type: ignore[attr-defined]
         except APIStatusError as exc:  # pragma: no cover - network failure path
             return {
                 "status": "error",

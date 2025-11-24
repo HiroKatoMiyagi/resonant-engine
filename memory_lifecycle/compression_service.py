@@ -39,7 +39,7 @@ class MemoryCompressionService:
         """
         try:
             message = self.claude.messages.create(
-                model="claude-haiku-3-5-20241022",
+                model="claude-3-5-haiku-20241022",
                 max_tokens=200,
                 messages=[{
                     "role": "user",

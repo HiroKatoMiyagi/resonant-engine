@@ -1,7 +1,7 @@
 # Resonant Engine 総合テスト仕様書
 
 **作成日**: 2025-11-23
-**バージョン**: 3.5（テストスキップ禁止ルール強化版）
+**バージョン**: 3.6（モデル名修正・既知問題対応版）
 **対象環境**: 開発環境（Docker Compose）
 **テスト種別**: システムテスト / 総合テスト
 
@@ -92,6 +92,56 @@ docker exec resonant_dev env | grep -E "(DATABASE_URL|ANTHROPIC_API_KEY)"
 ---
 
 ## 📋 変更履歴
+
+### v3.6 変更点（2025-11-24）
+
+**ST-AI修正:**
+- Claude APIモデル名を修正
+  - `claude-3-5-sonnet-20241022` → `claude-sonnet-4-5-20250929`（Sonnet 4.5）
+  - `claude-haiku-3-5-20241022` → `claude-3-5-haiku-20241022`（Haiku）
+- 修正ファイル:
+  - `bridge/providers/ai/kana_ai_bridge.py`
+  - `bridge/providers/claude_bridge.py`
+  - `memory_lifecycle/compression_service.py`
+
+**ST-MEM確認:**
+- `memory_lifecycle/`モジュールは完全に実装済み
+- インポートエラーの原因は環境設定（下記「既知の問題」参照）
+
+### ⚠️ 既知の問題と対処法（v3.6追加）
+
+#### ST-AI-002, ST-AI-004: Claude APIモデル名エラー
+
+**症状**: `404 Not Found` - モデルが見つからない
+
+**原因**: 古いモデル名 `claude-3-5-sonnet-20241022` が無効
+
+**解決済み**: v3.6でモデル名を `claude-sonnet-4-5-20250929` に修正
+
+#### ST-MEM-003, ST-MEM-004, ST-MEM-005: モジュールインポートエラー
+
+**症状**: `ImportError` または `ModuleNotFoundError`
+
+**原因候補と対処:**
+
+| 原因 | 確認方法 | 対処 |
+|-----|---------|------|
+| テーブル未作成 | `\dt semantic_memories` | Sprint 9マイグレーション実行 |
+| PYTHONPATH未設定 | `echo $PYTHONPATH` | docker-compose.dev.yml確認 |
+| コンテナ再起動必要 | - | `docker-compose down && up` |
+
+**確認コマンド:**
+
+```bash
+# モジュールインポートテスト
+docker exec resonant_dev python -c "from memory_lifecycle import ImportanceScorer; print('OK')"
+
+# テーブル存在確認
+docker exec resonant_postgres_dev psql -U resonant -d postgres -c "\dt semantic_memories"
+
+# 必要な場合マイグレーション実行
+docker exec resonant_postgres_dev psql -U resonant -d postgres -f /docker-entrypoint-initdb.d/006_memory_lifecycle_tables.sql
+```
 
 ### v3.5 変更点（2025-11-23）
 
@@ -1234,4 +1284,4 @@ async def test_example(db_pool):
 
 **テスト仕様書作成者**: Claude Code
 **最終更新**: 2025-11-23
-**バージョン**: 3.5（テストスキップ禁止ルール強化版）
+**バージョン**: 3.6（モデル名修正・既知問題対応版）

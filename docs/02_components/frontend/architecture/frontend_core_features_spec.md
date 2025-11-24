@@ -1,296 +1,442 @@
-# Frontend Core Features Implementation 仕様書
+# Frontend Core Features 実装仕様書
 
-## 0. CRITICAL: フロントエンド vs バックエンド ギャップ解消
+**作成日**: 2025-11-24
+**バージョン**: 1.1（API仕様修正版）
+**Sprint**: 14-15（フロントエンド拡張）
+**対象システム**: Resonant Engine Frontend
 
-**⚠️ IMPORTANT: 「フロントエンド実装率35% → 100%達成」**
+---
 
-Frontend Core Features Implementationは、現在35%しか実装されていないフロントエンド機能を、バックエンドとの100%対応を目指して完全実装します。特に矛盾検出UI、リアルタイム通信、ダッシュボード分析などの重要機能が未実装であり、これらを優先的に実装します。
+## ⚠️ 重要事項（MUST READ FIRST）
 
-```yaml
-frontend_gap_analysis:
-    current_implementation: "35% (基本CRUD のみ)"
-    target_implementation: "100% (バックエンド完全対応)"
-    critical_missing:
-        - Contradiction Detection UI (最重要)
-        - WebSocket/SSE Integration (効率化)
-        - Dashboard Analytics (可視化)
-        - Choice Preservation UI (選択肢管理)
-        - Re-evaluation Phase UI (AI修正フィードバック)
-    current_inefficiencies:
-        - 5秒間隔ポーリング → WebSocket切り替え必須
-        - システム状態の可視化なし
-        - 矛盾検出結果がUIで見えない
+### 絶対遵守事項（MUST）
+
+1. **本仕様書のAPI仕様に厳密に従うこと**
+   - バックエンドAPIは2種類存在する（dashboard API + bridge API）
+   - 各APIのプレフィックスを正確に使用すること
+
+2. **既存のフロントエンド構造を維持すること**
+   - `frontend/src/` の既存ディレクトリ構造を破壊しない
+   - 既存の `api/client.ts` を拡張して使用
+
+3. **型定義はバックエンドスキーマに完全一致させること**
+   - 独自の型定義を作らない
+   - 本仕様書の型定義をそのまま使用
+
+4. **総合テストv3.7の教訓を適用すること**
+   - 環境変数はハードコードしない
+   - 推測で実装しない（仕様書に従う）
+
+### 禁止事項（MUST NOT）
+
+| 禁止事項 | 理由 | 総合テストでの教訓 |
+|---------|------|------------------|
+| APIエンドポイントの独自変更 | バックエンド仕様に依存 | v3.5でモデル名間違いが発覚 |
+| 型定義の独自改変 | 型安全性の破壊 | - |
+| ハードコード値の使用 | 環境依存になる | v3.4でパスワードハードコード問題 |
+| 既存コンポーネントの変更 | 動作中機能の破壊 | - |
+| 仕様書にない機能追加 | スコープクリープ | v3.5でスキップ濫用 |
+| `any`型の使用 | 型安全性の破壊 | - |
+
+---
+
+## 0. バックエンドAPI構成（重要）
+
+### 2つのバックエンドが存在する
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Dashboard Backend (backend/app/)                            │
+│ ・ポート: 8000                                               │
+│ ・基本CRUD機能（Messages, Intents, Specifications等）        │
+│ ・プレフィックス: /api/                                      │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ Bridge API (bridge/api/)                                     │
+│ ・ポート: 設定依存（通常8001または同一8000）                   │
+│ ・高度機能（Contradiction, Re-evaluation, WebSocket, SSE）   │
+│ ・プレフィックス: /api/v1/                                   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 現在の実装状況
+### API一覧（変更禁止）
 
+#### Dashboard API (`/api/`)
 ```
-バックエンド機能 (100%完成)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-フロントエンド対応 (35%のみ)
-━━━━━━━━━━━━━━░░░░░░░░░░░░░░░░░░░░░░░░░░░
-              ↑
-    ここまで実装済み（Messages, Intents, Specifications, Notifications CRUD）
-
-未対応の重要機能:
-  - Contradiction Detection (矛盾検出) ❌
-  - Choice Preservation (選択肢保存) ❌
-  - Re-evaluation Phase (AI修正) ❌
-  - Dashboard Analytics (分析) ❌
-  - WebSocket (リアルタイム) ❌
-  - Memory Lifecycle UI (記憶管理) ❌
+GET    /api/messages           - メッセージ一覧
+POST   /api/messages           - メッセージ作成
+GET    /api/intents            - Intent一覧
+POST   /api/intents            - Intent作成
+GET    /api/notifications      - 通知一覧
 ```
 
-### 呼吸モデルとの関係
-
+#### Bridge API (`/api/v1/`)
 ```
-Frontend Implementation (フロントエンドの呼吸)
-    ↓
-Phase 1: Contradiction Detection UI (矛盾の可視化)
-    ↓
-Phase 2: WebSocket Integration (リアルタイム通信)
-    ↓
-Phase 3: Dashboard Analytics (システム状態可視化)
-    ↓
-Phase 4: Choice Preservation UI (選択肢保存)
-    ↓
-Phase 5: Re-evaluation UI (AI修正フィードバック)
+# Contradiction Detection
+POST   /api/v1/contradiction/check           - 矛盾チェック
+GET    /api/v1/contradiction/pending         - 未解決矛盾一覧
+PUT    /api/v1/contradiction/{id}/resolve    - 矛盾解決
+
+# Re-evaluation
+POST   /api/v1/intent/reeval                 - Intent再評価
+
+# Dashboard Analytics
+GET    /api/v1/dashboard/overview            - システム概要
+GET    /api/v1/dashboard/timeline            - タイムライン
+
+# Memory/Choice Preservation
+GET    /api/v1/memory/choice-points/pending  - 未決定選択肢
+POST   /api/v1/memory/choice-points          - 選択肢作成
+PUT    /api/v1/memory/choice-points/{id}/decide - 選択決定
+
+# WebSocket
+WS     /ws/intents                           - Intent更新通知
 ```
-
-### Done Definition (Phase制)
-
-#### Phase 1: 矛盾検出UI (最重要)
-- [ ] ContradictionDashboard実装（グリッド3列レイアウト）
-- [ ] ContradictionItem実装（レベル別色分け）
-- [ ] ContradictionFilter実装（フィルタリング機能）
-- [ ] ContradictionResolution実装（解決アクション）
-- [ ] API統合完了（`/api/contradictions/`）
-
-#### Phase 2: WebSocket統合 (効率化)
-- [ ] WebSocketクライアント実装
-- [ ] 5秒ポーリング → リアルタイム通信切り替え
-- [ ] 対象コンポーネント更新（Messages, Notifications, Dashboard）
-- [ ] 接続管理・エラーハンドリング実装
-
-#### Phase 3: Dashboard Analytics (可視化)
-- [ ] AnalyticsDashboard実装
-- [ ] SystemMetrics実装（Messages総数、Intents総数、矛盾検出数）
-- [ ] ActivityGraph実装（時系列グラフ）
-- [ ] StatusIndicator実装（Crisis Index表示）
-
-#### Phase 4: Choice Preservation UI (選択肢管理)
-- [ ] ChoicePointsList実装
-- [ ] ChoicePointDetail実装
-- [ ] ChoiceRestore実装
-- [ ] API統合完了（`/api/choices/`）
-
-#### Phase 5: Re-evaluation UI (AI修正)
-- [ ] ReEvaluationPanel実装
-- [ ] AIFeedbackDisplay実装
-- [ ] Re-evaluation Phase発動時の可視化
 
 ---
 
 ## 1. 概要
 
 ### 1.1 目的
-React + TypeScriptフロントエンドを拡張し、バックエンドの全機能に対応したUIを提供する。
+フロントエンド実装率を35%から100%に引き上げ、バックエンドの全機能に対応したUIを提供する。
 
-### 1.2 背景
+### 1.2 現在の実装状況
 
-**現在のフロントエンド実装状況:**
-- ✅ Messages CRUD (完了)
-- ✅ Intents CRUD (完了)
-- ✅ Specifications CRUD (完了)
-- ✅ Notifications (完了)
-- ❌ Contradiction Detection (未実装)
-- ❌ Choice Preservation (未実装)
-- ❌ Re-evaluation Phase (未実装)
-- ❌ Dashboard Analytics (未実装)
-- ❌ WebSocket/SSE (ポーリングのみ)
-- ❌ Memory Lifecycle (未実装)
+```
+バックエンド機能 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100%
 
-**問題:**
-- 重要な機能（矛盾検出、選択肢保存）がUIで操作できない
-- 5秒間隔のポーリングが非効率
-- システム状態が可視化されていない
-- AI修正フィードバックが見えない
+フロントエンド  ━━━━━━━━━━━━━░░░░░░░░░░░░░░░░░░░░  35%
+                          ↑
+               ここまで実装済み
+               (Messages, Intents, Specifications, Notifications)
+```
 
-### 1.3 目標
-- フロントエンド実装率: 35% → 100%
-- 矛盾検出UIによるユーザビリティ向上
-- WebSocket統合による効率化
-- ダッシュボードによるシステム状態可視化
-
-### 1.4 技術スタック（変更禁止）
+### 1.3 技術スタック（変更禁止）
 
 ```typescript
-// 既存スタック維持
+// 既存スタック - 変更してはならない
 {
-  "frontend": {
-    "framework": "React 18",
-    "language": "TypeScript",
-    "build": "Vite",
-    "styling": "Tailwind CSS",
-    "data": "React Query v4",
-    "http": "Axios",
-    "routing": "React Router"
-  }
+  "framework": "React 18.2.0",
+  "language": "TypeScript 5.2.2",
+  "build": "Vite 5.0.0",
+  "styling": "Tailwind CSS 3.3.5",
+  "data": "TanStack React Query 5.8.4",
+  "http": "Axios 1.6.2",
+  "routing": "React Router DOM 6.20.1"
 }
 ```
 
 ---
 
-## 2. フェーズ別詳細仕様
+## 2. 型定義（バックエンド準拠・変更禁止）
 
-### 2.1 Phase 1: 矛盾検出UI (最重要)
-
-#### 2.1.1 機能要件
-
-**目的**: バックエンドの矛盾検出機能をフロントエンドで完全に可視化
-
-**API仕様**: 既存 `/api/contradictions/` エンドポイント使用
-
-**コンポーネント構成**:
-```typescript
-/src/components/contradiction/
-├─ ContradictionDashboard.tsx     // メインダッシュボード
-├─ ContradictionItem.tsx          // 個別矛盾表示
-├─ ContradictionFilter.tsx        // フィルタリング
-└─ ContradictionResolution.tsx    // 解決アクション
-```
-
-#### 2.1.2 UI仕様（厳守）
-
-**レイアウト**: グリッド3列
-**色指定**:
-- Error: `border-red-500 bg-red-50`
-- Warning: `border-yellow-500 bg-yellow-50`
-- Info: `border-blue-500 bg-blue-50`
-
-**フォント**: Inter, 14px base
-**スペーシング**: Tailwind標準（p-4, m-2等）
-
-#### 2.1.3 データフロー
+### 2.1 Contradiction型（Sprint 11バックエンドと一致）
 
 ```typescript
-interface ContradictionResponse {
-  id: number;
-  level: 'error' | 'warning' | 'info';
-  message: string;
-  created_at: string;
-  resolved: boolean;
-  confidence_score?: number;
-  related_intent_ids?: number[];
+// src/types/contradiction.ts - この通りに作成すること
+
+/**
+ * 矛盾タイプ（バックエンドのcontradiction_typeに対応）
+ * 変更禁止 - バックエンドのdetector.pyで定義されている値
+ */
+export type ContradictionType =
+  | 'tech_stack'    // 技術スタック矛盾
+  | 'policy_shift'  // ポリシー転換
+  | 'duplicate'     // 重複作業
+  | 'dogma';        // ドグマ（未検証の断定）
+
+/**
+ * 解決ステータス
+ * 変更禁止 - バックエンドのapi_schemas.pyで定義
+ */
+export type ResolutionStatus = 'pending' | 'resolved' | 'dismissed';
+
+/**
+ * 解決アクション
+ * 変更禁止 - バックエンドのapi_schemas.pyで定義
+ */
+export type ResolutionAction = 'policy_change' | 'mistake' | 'coexist';
+
+/**
+ * ContradictionSchema - バックエンドapi_schemas.pyと完全一致
+ *
+ * IMPORTANT: この型定義はバックエンドのContradictionSchemaと
+ * 1対1で対応している。変更してはならない。
+ */
+export interface Contradiction {
+  id: string;                              // UUID形式
+  user_id: string;
+  new_intent_id: string;                   // UUID形式
+  new_intent_content: string;
+  conflicting_intent_id: string | null;    // UUID形式
+  conflicting_intent_content: string | null;
+  contradiction_type: ContradictionType;
+  confidence_score: number;                // 0.0-1.0
+  detected_at: string;                     // ISO 8601形式
+  details: Record<string, unknown>;
+  resolution_status: ResolutionStatus;
+  resolution_action: ResolutionAction | null;
+  resolution_rationale: string | null;
+  resolved_at: string | null;              // ISO 8601形式
+}
+
+/**
+ * 矛盾チェックリクエスト
+ */
+export interface CheckContradictionRequest {
+  user_id: string;
+  intent_id: string;       // UUID形式
+  intent_content: string;
+}
+
+/**
+ * 矛盾解決リクエスト
+ */
+export interface ResolveContradictionRequest {
+  resolution_action: ResolutionAction;
+  resolution_rationale: string;  // 最低10文字
+  resolved_by: string;
+}
+
+/**
+ * APIレスポンス（一覧取得用）
+ */
+export interface ContradictionListResponse {
+  contradictions: Contradiction[];
+  total: number;
 }
 ```
 
-### 2.2 Phase 2: WebSocket統合 (効率化)
-
-#### 2.2.1 機能要件
-
-**目的**: 5秒ポーリング → リアルタイム通信切り替え
-
-**WebSocket URL**: `ws://localhost:8000/ws` (環境変数から取得)
-
-**対象コンポーネント**:
-- MessagesPage (メッセージ更新)
-- NotificationsPanel (通知受信)
-- DashboardAnalytics (メトリクス更新)
-- ContradictionDashboard (矛盾検出更新)
-
-#### 2.2.2 実装仕様
+### 2.2 SystemMetrics型（Dashboard Analytics用）
 
 ```typescript
-// WebSocketクライアント（場所指定）
-/src/hooks/useWebSocket.ts
-/src/services/websocket.ts
+// src/types/dashboard.ts
 
-// イベントタイプ（追加禁止）
-type WebSocketEvent =
-  | 'message_created'
-  | 'contradiction_detected'
-  | 'notification_sent'
-  | 'system_status_update'
-```
-
-#### 2.2.3 接続管理
-
-```typescript
-const WS_CONFIG = {
-  url: process.env.VITE_WS_URL || 'ws://localhost:8000/ws',
-  reconnectInterval: 5000,
-  maxReconnectAttempts: 10
-}
-```
-
-### 2.3 Phase 3: Dashboard Analytics (可視化)
-
-#### 2.3.1 機能要件
-
-**目的**: システム状態をリアルタイム表示
-
-**コンポーネント構成**:
-```typescript
-/src/components/dashboard/
-├─ AnalyticsDashboard.tsx
-├─ SystemMetrics.tsx
-├─ ActivityGraph.tsx
-└─ StatusIndicator.tsx
-```
-
-#### 2.3.2 表示項目（追加・削除禁止）
-
-```typescript
-interface SystemMetrics {
+/**
+ * システムメトリクス - /api/v1/dashboard/overview のレスポンス
+ */
+export interface SystemOverview {
   messages_count: number;
   intents_count: number;
-  contradictions_count: number;
-  crisis_index: number; // 0-100
-  uptime_percentage: number;
-  memory_usage_mb?: number;
+  active_sessions: number;
+  contradictions_pending: number;
+  crisis_index: number;           // 0-100
+  last_updated: string;           // ISO 8601
+}
+
+/**
+ * タイムラインデータ
+ */
+export interface TimelineEntry {
+  timestamp: string;
+  event_type: string;
+  count: number;
+}
+
+export interface TimelineResponse {
+  entries: TimelineEntry[];
+  granularity: 'minute' | 'hour' | 'day';
 }
 ```
 
-### 2.4 Phase 4: Choice Preservation UI
-
-#### 2.4.1 API仕様（変更禁止）
+### 2.3 ChoicePoint型（Memory API用）
 
 ```typescript
-// 既存API使用
-GET    /api/choices/
-POST   /api/choices/
-PUT    /api/choices/{id}/restore
-DELETE /api/choices/{id}
+// src/types/choice.ts
+
+export interface Choice {
+  id: string;
+  choice_text: string;
+  selected: boolean;
+  evaluation_score: number | null;
+  rejection_reason: string | null;
+}
+
+export interface ChoicePoint {
+  id: string;
+  user_id: string;
+  question: string;
+  choices: Choice[];
+  selected_choice_id: string | null;
+  tags: string[];
+  context_type: string;
+  decision_rationale: string | null;
+  created_at: string;
+  decided_at: string | null;
+}
 ```
-
-#### 2.4.2 コンポーネント構成
-
-```typescript
-/src/components/choice/
-├─ ChoicePointsList.tsx
-├─ ChoicePointDetail.tsx
-└─ ChoiceRestore.tsx
-```
-
-### 2.5 Phase 5: Re-evaluation UI
-
-#### 2.5.1 機能要件
-
-**目的**: Re-evaluation Phase発動時のAI修正を可視化
-
-**表示内容**:
-- 修正前の状態
-- AI提案内容
-- 修正後の状態
-- ユーザー承認/拒否
 
 ---
 
-## 3. 非機能要件
+## 3. Phase 1: 矛盾検出UI（Sprint 14）
 
-### 3.1 パフォーマンス要件
+### 3.1 ファイル構成（この通りに作成）
+
+```
+frontend/src/
+├── types/
+│   └── contradiction.ts      # 2.1の型定義
+├── api/
+│   └── contradiction.ts      # API呼び出し関数
+├── components/
+│   └── contradiction/
+│       ├── ContradictionDashboard.tsx
+│       ├── ContradictionItem.tsx
+│       ├── ContradictionFilter.tsx
+│       └── ContradictionResolution.tsx
+└── pages/
+    └── ContradictionsPage.tsx
+```
+
+### 3.2 API呼び出し関数
+
+```typescript
+// src/api/contradiction.ts
+
+import axios from 'axios';
+import type {
+  Contradiction,
+  ContradictionListResponse,
+  CheckContradictionRequest,
+  ResolveContradictionRequest
+} from '../types/contradiction';
+
+// API Base URL - 環境変数から取得（ハードコード禁止）
+const BRIDGE_API_URL = import.meta.env.VITE_BRIDGE_API_URL || 'http://localhost:8000';
+
+/**
+ * 未解決の矛盾一覧を取得
+ */
+export async function getPendingContradictions(
+  userId: string
+): Promise<ContradictionListResponse> {
+  const response = await axios.get<ContradictionListResponse>(
+    `${BRIDGE_API_URL}/api/v1/contradiction/pending`,
+    { params: { user_id: userId } }
+  );
+  return response.data;
+}
+
+/**
+ * Intentの矛盾をチェック
+ */
+export async function checkIntentContradiction(
+  request: CheckContradictionRequest
+): Promise<ContradictionListResponse> {
+  const response = await axios.post<ContradictionListResponse>(
+    `${BRIDGE_API_URL}/api/v1/contradiction/check`,
+    request
+  );
+  return response.data;
+}
+
+/**
+ * 矛盾を解決
+ */
+export async function resolveContradiction(
+  contradictionId: string,
+  request: ResolveContradictionRequest
+): Promise<{ status: string }> {
+  const response = await axios.put<{ status: string }>(
+    `${BRIDGE_API_URL}/api/v1/contradiction/${contradictionId}/resolve`,
+    request
+  );
+  return response.data;
+}
+```
+
+### 3.3 UI仕様（厳守）
+
+#### 色指定（変更禁止）
+
+| contradiction_type | 枠線 | 背景 | 意味 |
+|-------------------|------|------|------|
+| `tech_stack` | `border-red-500` | `bg-red-50` | 技術スタック矛盾 |
+| `policy_shift` | `border-orange-500` | `bg-orange-50` | ポリシー転換 |
+| `duplicate` | `border-yellow-500` | `bg-yellow-50` | 重複作業 |
+| `dogma` | `border-blue-500` | `bg-blue-50` | ドグマ検出 |
+
+#### レイアウト仕様
+
+- グリッド: `grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4`
+- カード: `p-4 border-2 rounded-lg`
+- 信頼度バー: `h-2 bg-gray-200 rounded` + 内部バー
+
+---
+
+## 4. Phase 2: WebSocket統合（Sprint 14後半）
+
+### 4.1 WebSocket接続設定
+
+```typescript
+// src/hooks/useWebSocket.ts
+
+const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/intents';
+
+interface WebSocketConfig {
+  url: string;
+  reconnectInterval: number;
+  maxReconnectAttempts: number;
+}
+
+const defaultConfig: WebSocketConfig = {
+  url: WS_URL,
+  reconnectInterval: 5000,  // 5秒
+  maxReconnectAttempts: 10,
+};
+```
+
+### 4.2 イベントタイプ（変更禁止）
+
+```typescript
+type WebSocketEventType =
+  | 'intent_created'
+  | 'intent_updated'
+  | 'contradiction_detected'
+  | 'choice_point_created';
+```
+
+---
+
+## 5. Phase 3: Dashboard Analytics（Sprint 15）
+
+### 5.1 API呼び出し
+
+```typescript
+// src/api/dashboard.ts
+
+export async function getSystemOverview(): Promise<SystemOverview> {
+  const response = await axios.get<SystemOverview>(
+    `${BRIDGE_API_URL}/api/v1/dashboard/overview`
+  );
+  return response.data;
+}
+
+export async function getTimeline(
+  granularity: 'minute' | 'hour' | 'day' = 'hour'
+): Promise<TimelineResponse> {
+  const response = await axios.get<TimelineResponse>(
+    `${BRIDGE_API_URL}/api/v1/dashboard/timeline`,
+    { params: { granularity } }
+  );
+  return response.data;
+}
+```
+
+### 5.2 Crisis Index表示仕様
+
+| Crisis Index | 色 | 状態 |
+|--------------|-----|------|
+| 0-69 | `text-green-600` | 正常 |
+| 70-84 | `text-yellow-600` | 警告（pre-crisis） |
+| 85-100 | `text-red-600` | 危機（crisis） |
+
+---
+
+## 6. 非機能要件
+
+### 6.1 パフォーマンス要件
 
 | 項目 | 要件 |
 |-----|------|
@@ -299,99 +445,60 @@ DELETE /api/choices/{id}
 | WebSocket接続 | < 1秒 |
 | メモリ使用量 | < 50MB |
 
-### 3.2 ユーザビリティ要件
+### 6.2 エラーハンドリング
 
-- 直感的なレイアウト
-- 色による視覚的分類
-- レスポンシブデザイン
-- エラー状態の明確な表示
-
-### 3.3 保守性要件
-
-- TypeScript型安全性100%
-- コンポーネント単位での分割
-- 既存APIとの完全互換性
-- 設定の外部化
-
----
-
-## 4. 制約事項
-
-### 4.1 技術制約（厳守）
-
-1. **使用技術スタック変更禁止**
-2. **既存APIエンドポイント変更禁止**
-3. **ファイル配置規則厳守**
-4. **色・フォント・スペーシング指定厳守**
-5. **追加機能実装禁止**（アニメーション等）
-
-### 4.2 実装制約
-
-1. **判断余地を与えない詳細指定**
-2. **段階的実装（Phase順厳守）**
-3. **既存コードとの競合回避**
-4. **テスト可能性の確保**
+```typescript
+// すべてのAPI呼び出しで使用するエラーハンドリング
+try {
+  const data = await apiCall();
+} catch (error) {
+  if (axios.isAxiosError(error)) {
+    if (error.response?.status === 404) {
+      // エンドポイントが見つからない
+      console.error('API endpoint not found');
+    } else if (error.response?.status === 500) {
+      // サーバーエラー
+      console.error('Server error');
+    }
+  }
+  throw error;
+}
+```
 
 ---
 
-## 5. テスト戦略
+## 7. 環境変数設定
 
-### 5.1 単体テスト
+```bash
+# frontend/.env.local（この形式で設定）
 
-- Jest + React Testing Library
-- コンポーネント単位でのテスト
-- API統合テスト（Mock Serviceない場合）
+# Dashboard Backend
+VITE_API_URL=http://localhost:8000
 
-### 5.2 統合テスト
+# Bridge API（高度機能用）
+VITE_BRIDGE_API_URL=http://localhost:8000
 
-- E2Eテスト（Playwright推奨）
-- 実際のバックエンドとの統合確認
-- WebSocket接続テスト
+# WebSocket
+VITE_WS_URL=ws://localhost:8000/ws/intents
+```
 
-### 5.3 受け入れテスト
-
-- Phase毎の受け入れ基準
-- UI/UX要件の確認
-- パフォーマンステスト
+**注意**: 環境変数はハードコードしない。`import.meta.env.VITE_*` から取得すること。
 
 ---
 
-## 6. リスク管理
+## 8. 実装優先順位
 
-### 6.1 技術リスク
+### Sprint 14（必須）
+1. Phase 1: 矛盾検出UI（最重要）
+2. Phase 2: WebSocket統合（効率化）
 
-| リスク | 影響度 | 対策 |
-|--------|--------|------|
-| WebSocket接続不安定 | 中 | フォールバック（ポーリング）機能 |
-| API応答遅延 | 中 | タイムアウト処理・ローディング状態 |
-| バックエンド仕様変更 | 高 | 型定義による早期検出 |
-
-### 6.2 スケジュールリスク
-
-| リスク | 対策 |
-|--------|------|
-| Phase 1遅延 | 最重要機能のため優先リソース投入 |
-| WebSocket実装複雑化 | 段階的実装（接続→イベント→統合） |
-| テスト工数不足 | 実装と並行してテスト作成 |
+### Sprint 15（重要）
+3. Phase 3: Dashboard Analytics
+4. Phase 4: Choice Preservation UI
+5. Phase 5: Re-evaluation UI
 
 ---
 
-## 7. 実装優先順位
-
-### Priority 1 (必須)
-- Phase 1: 矛盾検出UI
-- Phase 2: WebSocket統合
-
-### Priority 2 (重要)
-- Phase 3: Dashboard Analytics
-
-### Priority 3 (推奨)
-- Phase 4: Choice Preservation UI
-- Phase 5: Re-evaluation UI
-
----
-
-**作成者**: Claude Sonnet 4 (Kana)
-**作成日**: 2025-11-24
-**バージョン**: 1.0
-**対象システム**: Resonant Engine Frontend
+**作成者**: Claude Code
+**レビュー日**: 2025-11-24
+**バージョン**: 1.1（API仕様修正版）

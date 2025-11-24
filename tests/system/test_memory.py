@@ -106,23 +106,17 @@ async def test_importance_scorer():
     
     目的: ImportanceScorerモジュールが存在し、基本機能を持つことを確認
     """
-    import importlib.util
     import sys
     
-    # 絶対パスで直接インポート
-    spec = importlib.util.spec_from_file_location(
-        "memory_lifecycle_root",
-        "/app/memory_lifecycle/__init__.py"
-    )
-    memory_lifecycle = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(memory_lifecycle)
+    # プロジェクトルートを最優先でインポート（tests/memory_lifecycleより優先）
+    sys.path.insert(0, '/app')
     
-    ImportanceScorer = memory_lifecycle.ImportanceScorer
+    from memory_lifecycle.importance_scorer import ImportanceScorer
     
     # ImportanceScorerはpoolが必要なので、クラスの存在とメソッドの存在のみ確認
     assert ImportanceScorer is not None
     assert hasattr(ImportanceScorer, 'calculate_score')
-    assert hasattr(ImportanceScorer, 'apply_decay')
+    assert hasattr(ImportanceScorer, 'calculate_time_decay')
 
 
 @pytest.mark.asyncio
@@ -131,22 +125,17 @@ async def test_capacity_manager():
     
     目的: CapacityManagerモジュールが存在し、基本機能を持つことを確認
     """
-    import importlib.util
+    import sys
     
-    # 絶対パスで直接インポート
-    spec = importlib.util.spec_from_file_location(
-        "memory_lifecycle_root",
-        "/app/memory_lifecycle/__init__.py"
-    )
-    memory_lifecycle = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(memory_lifecycle)
+    # プロジェクトルートを最優先でインポート（tests/memory_lifecycleより優先）
+    sys.path.insert(0, '/app')
     
-    CapacityManager = memory_lifecycle.CapacityManager
+    from memory_lifecycle.capacity_manager import CapacityManager
     
     # CapacityManagerはpool, compression_service, scorerが必要なので、クラスの存在とメソッドの存在のみ確認
     assert CapacityManager is not None
-    assert hasattr(CapacityManager, 'check_capacity')
-    assert hasattr(CapacityManager, 'auto_compress_if_needed')
+    assert hasattr(CapacityManager, 'check_and_manage')
+    assert hasattr(CapacityManager, 'get_memory_usage')
 
 
 @pytest.mark.asyncio
@@ -155,17 +144,15 @@ async def test_compression_service():
     
     目的: MemoryCompressionServiceモジュールが存在し、基本機能を持つことを確認
     """
-    import importlib.util
+    import sys
+    import os
     
-    # 絶対パスで直接インポート
-    spec = importlib.util.spec_from_file_location(
-        "memory_lifecycle_root",
-        "/app/memory_lifecycle/__init__.py"
-    )
-    memory_lifecycle = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(memory_lifecycle)
+    # プロジェクトルートを優先してインポート
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
     
-    MemoryCompressionService = memory_lifecycle.MemoryCompressionService
+    from memory_lifecycle import MemoryCompressionService
     
     # MemoryCompressionServiceはpoolとapi_keyが必要なので、クラスの存在とメソッドの存在のみ確認
     assert MemoryCompressionService is not None

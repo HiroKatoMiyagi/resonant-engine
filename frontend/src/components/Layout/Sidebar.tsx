@@ -1,4 +1,4 @@
-import { MessageSquare, FileText, Target } from 'lucide-react';
+import { MessageSquare, FileText, Target, AlertTriangle } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
 export default function Sidebar() {
@@ -6,6 +6,7 @@ export default function Sidebar() {
     { to: '/messages', icon: MessageSquare, label: 'Messages' },
     { to: '/specifications', icon: FileText, label: 'Specifications' },
     { to: '/intents', icon: Target, label: 'Intents' },
+    { to: '/contradictions', icon: AlertTriangle, label: '矛盾検出' },
   ];
 
   return (

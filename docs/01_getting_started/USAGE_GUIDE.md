@@ -8,19 +8,35 @@
 
 ## 🚨 重要な注意事項
 
+### 1. 古い情報に注意
+
 **Claude Codeが示した古い使い方（CLIツール中心）は現在非推奨です。**
 
 Resonant Engineは、初期のCLIツール群から**本格的なマイクロサービスアーキテクチャ**に進化しました。
+
+### 2. 開発環境と本番環境の違い
+
+**開発環境（`start-dev.sh`）**:
+- ✅ テスト実行・開発用
+- ❌ **UIなし（ブラウザアクセス不可）**
+- 用途: バックエンド開発、テスト実行
+
+**本番環境（`docker-compose.yml`）**:
+- ✅ UI付き（ブラウザアクセス可能）
+- ⚠️ **Sprint 1-2時点の機能のみ**
+- 用途: UI確認、デモ
+
+詳細は [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) を参照してください。
 
 ---
 
 ## 📋 目次
 
 1. [Resonant Engineとは](#resonant-engineとは)
-2. [現在のアーキテクチャ](#現在のアーキテクチャ)
-3. [開発環境の起動](#開発環境の起動)
-4. [基本的な使い方](#基本的な使い方)
-5. [API経由でのアクセス](#api経由でのアクセス)
+2. [環境の選択](#環境の選択)
+3. [開発環境の使い方](#開発環境の使い方)
+4. [本番環境の使い方](#本番環境の使い方)
+5. [基本的な使い方](#基本的な使い方)
 6. [テスト実行](#テスト実行)
 7. [よくある質問](#よくある質問)
 
@@ -56,44 +72,32 @@ v1.1 (2025)
 
 ---
 
-## 現在のアーキテクチャ
+## 環境の選択
 
-### システム構成
+### どちらを使うべきか？
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Resonant Engine                       │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
-│  │   Backend    │  │   Bridge     │  │   Frontend   │ │
-│  │   (FastAPI)  │  │   Services   │  │   (React)    │ │
-│  └──────┬───────┘  └──────┬───────┘  └──────────────┘ │
-│         │                  │                            │
-│         └──────────┬───────┘                            │
-│                    │                                    │
-│         ┌──────────▼───────────┐                       │
-│         │   PostgreSQL 15      │                       │
-│         │   + pgvector         │                       │
-│         └──────────────────────┘                       │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
-```
+| 目的 | 推奨環境 | 理由 |
+|-----|---------|------|
+| システムを理解したい | 開発環境 | テストを実行しながら学べる |
+| コードを開発したい | 開発環境 | 高速な開発サイクル |
+| UIを確認したい | 本番環境 | ブラウザでアクセス可能 |
+| デモを見せたい | 本番環境 | 視覚的に分かりやすい |
 
-### 主要コンポーネント
+### 環境比較表
 
-| コンポーネント | 役割 | ポート |
-|--------------|------|--------|
-| **backend/** | FastAPI REST API | 8000 |
-| **bridge/** | ビジネスロジック層 | - |
-| **memory_store/** | メモリ管理 | - |
-| **context_assembler/** | コンテキスト組み立て | - |
-| **retrieval/** | 検索オーケストレーション | - |
-| **PostgreSQL** | データベース | 5432 |
+| 項目 | 開発環境 | 本番環境 |
+|-----|---------|---------|
+| **起動コマンド** | `./docker/scripts/start-dev.sh` | `docker-compose up` |
+| **起動時間** | ⚡ 30秒 | 🐢 5-10分（ビルド必要） |
+| **UI** | ❌ なし | ✅ あり |
+| **ブラウザアクセス** | ❌ 不可 | ✅ 可能 |
+| **テスト実行** | ✅ 高速 | ⚠️ 可能だが遅い |
+| **最新機能** | ✅ 全て（Sprint 1-11） | ⚠️ Sprint 1-2のみ |
+| **用途** | 開発・テスト | UI確認・デモ |
 
 ---
 
-## 開発環境の起動
+## 開発環境の使い方
 
 ### 前提条件
 
@@ -106,7 +110,7 @@ v1.1 (2025)
 # 1. プロジェクトルートに移動
 cd /path/to/resonant-engine
 
-# 2. 開発環境起動スクリプト実行
+# 2. 開発環境起動
 ./docker/scripts/start-dev.sh
 ```
 
@@ -128,15 +132,58 @@ docker ps | grep resonant
 # resonant_postgres_dev Up (healthy)
 ```
 
-### ヘルスチェック
+### ⚠️ 重要: UIはありません
+
+開発環境では**ブラウザでアクセスできません**。以下の方法で操作します：
+
+1. **テスト実行**: `docker exec resonant_dev pytest tests/system/ -v`
+2. **データベース操作**: `docker exec resonant_postgres_dev psql -U resonant -d postgres`
+3. **Pythonコード実行**: `docker exec -it resonant_dev bash`
+
+---
+
+## 本番環境の使い方
+
+### 起動手順
 
 ```bash
-# データベース接続確認
-docker exec resonant_postgres_dev pg_isready -U resonant -d postgres
+# 1. プロジェクトルートに移動
+cd /path/to/resonant-engine
 
-# 開発コンテナ確認
-docker exec resonant_dev python --version
-# Python 3.11.14
+# 2. 本番環境起動
+cd docker
+docker-compose up --build -d
+```
+
+### ブラウザでアクセス
+
+起動後、以下のURLにアクセスできます：
+
+| サービス | URL | 説明 |
+|---------|-----|------|
+| **Frontend** | http://localhost:3000 | React UI |
+| **Backend API** | http://localhost:8000 | FastAPI |
+| **API Docs** | http://localhost:8000/docs | Swagger UI |
+
+### ⚠️ 重要: 古いUIです
+
+現在のFrontendは**Sprint 1-2時点**のもので、以下の機能は未統合です：
+
+- ❌ Memory Lifecycle（Sprint 9）
+- ❌ Choice Preservation（Sprint 10）
+- ❌ Contradiction Detection（Sprint 11）
+- ❌ Context Assembler（Sprint 5）
+
+**対応済みの機能**:
+- ✅ Messages表示・作成
+- ✅ Intents表示・作成
+- ✅ Specifications表示・作成
+
+### 停止方法
+
+```bash
+cd docker
+docker-compose down
 ```
 
 ---
@@ -283,31 +330,7 @@ async def use_ai_bridge():
 asyncio.run(use_ai_bridge())
 ```
 
----
 
-## API経由でのアクセス
-
-### FastAPI Backend（開発中）
-
-現在、FastAPI Backendは実装済みですが、開発環境では直接Pythonコードまたはデータベースアクセスを推奨します。
-
-#### API起動（オプション）
-
-```bash
-cd backend
-docker-compose up --build -d
-```
-
-#### エンドポイント
-
-- `GET /api/intents` - Intent一覧
-- `POST /api/intents` - Intent作成
-- `GET /api/messages` - メッセージ一覧
-- `GET /api/specifications` - 仕様書一覧
-
-#### Swagger UI
-
-http://localhost:8000/docs
 
 ---
 
@@ -361,40 +384,60 @@ docker exec resonant_dev pytest tests/acceptance/test_sprint5_context_assembler.
 
 ## よくある質問
 
-### Q1: 古いCLIツール（utils/record_intent.py等）は使えますか？
+### Q1: `start-dev.sh`で全機能が使えるようになる？
 
-**A**: 使えますが、**非推奨**です。現在のアーキテクチャでは、データベース直接アクセスまたはBridge Servicesの使用を推奨します。
+**A: いいえ。テスト実行環境のみです。**
 
-古いCLIツールは、初期プロトタイプの遺産として残っていますが、メンテナンスされていません。
+開発環境では：
+- ✅ テスト実行
+- ✅ データベース操作
+- ✅ Pythonコード実行
+- ❌ **ブラウザでのUIアクセス（不可）**
 
-### Q2: どのファイルから始めればいいですか？
+UIが必要な場合は、本番環境（`docker-compose up`）を起動してください。
 
-**A**: 用途によって異なります：
+### Q2: ブラウザでアクセスするには？
 
-- **システム理解**: `docs/01_getting_started/USAGE_GUIDE.md`（このファイル）
-- **開発環境**: `docker/README_DEV.md`
-- **テスト実行**: `docs/test_specs/system_test_specification_20251123.md`
-- **アーキテクチャ**: `docs/output/resonant_total_architecture_yuno_hiroaki_full_2025-11-07.md`
+**A: 本番環境を起動してください。**
 
-### Q3: Frontend（React）はどこにありますか？
+```bash
+cd docker
+docker-compose up --build -d
+# http://localhost:3000
+```
 
-**A**: `frontend/`ディレクトリに存在しますが、現在は**バックエンド開発が優先**されています。
+ただし、現在のFrontendは**Sprint 1-2時点**の機能のみです。
 
-フロントエンドは、Sprint 1-2で基本実装されましたが、その後のSprint（3-11）ではバックエンド機能の拡充に注力しています。
+### Q3: 古いCLIツール（utils/record_intent.py等）は使えますか？
 
-### Q4: 本番環境へのデプロイ方法は？
+**A**: 使えますが、**非推奨**です。
 
-**A**: 現在は**開発環境のみ**サポートしています。本番デプロイは今後のフェーズで実装予定です。
+現在のアーキテクチャでは、データベース直接アクセスまたはBridge Servicesの使用を推奨します。古いCLIツールはメンテナンスされていません。
 
-### Q5: Claude API Keyはどこで設定しますか？
+### Q4: どちらの環境を使うべき？
 
-**A**: `docker/.env.dev`ファイルに設定します：
+**A**: 目的によって異なります。
+
+- **開発・テスト**: 開発環境（`start-dev.sh`）
+- **UI確認・デモ**: 本番環境（`docker-compose up`）
+
+詳細は[環境の選択](#環境の選択)を参照してください。
+
+### Q5: Frontendが古いのはなぜ？
+
+**A**: 開発の優先順位のためです。
+
+現在はバックエンド機能（Memory System, Context Assembler, Contradiction Detection等）の実装を優先しています。Frontend統合はSprint 12以降を予定しています。
+
+### Q6: Claude API Keyはどこで設定？
+
+**A**: `docker/.env.dev`ファイルに設定します。
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-api03-your-key-here
 ```
 
-### Q6: エラーが発生した場合は？
+### Q7: エラーが発生した場合は？
 
 **A**: トラブルシューティング手順：
 
@@ -412,8 +455,15 @@ docker-compose -f docker-compose.dev.yml down -v
 ```
 
 3. ドキュメント参照
-- `docker/README_DEV.md` - トラブルシューティングセクション
+- [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) - 現状の詳細
+- `docker/README_DEV.md` - トラブルシューティング
 - `docs/troubleshooting/` - 既知の問題
+
+### Q8: 本番デプロイはできる？
+
+**A**: 現在は開発中です。
+
+`docker-compose.yml`は「本番環境」という名前ですが、実際は開発中のプロトタイプです。本番デプロイは今後のフェーズで実装予定です。
 
 ---
 
@@ -440,26 +490,63 @@ docker-compose -f docker-compose.dev.yml down -v
 
 ## 🎯 次のステップ
 
-### 初めての方
+### 初めての方（システム理解）
 
-1. ✅ 開発環境を起動
-2. ✅ テストを実行して動作確認
-3. ✅ データベースを確認
-4. ✅ サンプルコードを実行
+**推奨**: 開発環境でテストを実行
+
+```bash
+# 1. 開発環境起動
+./docker/scripts/start-dev.sh
+
+# 2. テスト実行（システムの動作を確認）
+docker exec resonant_dev pytest tests/system/ -v
+
+# 3. データベース確認
+docker exec resonant_postgres_dev psql -U resonant -d postgres -c "\dt"
+
+# 4. ドキュメント読む
+# - CURRENT_STATUS.md（現状理解）
+# - docker/README_DEV.md（開発環境詳細）
+```
+
+### UIを見たい方
+
+**推奨**: 本番環境を起動
+
+```bash
+# 1. 本番環境起動（5-10分かかります）
+cd docker
+docker-compose up --build -d
+
+# 2. ブラウザでアクセス
+# Frontend: http://localhost:3000
+# API Docs: http://localhost:8000/docs
+
+# 注意: Sprint 1-2時点の機能のみです
+```
 
 ### 開発者の方
 
-1. ✅ `docker/README_DEV.md`を熟読
-2. ✅ テストコードを読んで理解
-3. ✅ Bridge Servicesのコードを確認
-4. ✅ 新機能の実装開始
+**推奨**: 開発環境 + ドキュメント熟読
 
-### システム管理者の方
+```bash
+# 1. 開発環境起動
+./docker/scripts/start-dev.sh
 
-1. ✅ Docker環境の理解
-2. ✅ PostgreSQLマイグレーションの確認
-3. ✅ ヘルスチェックの設定
-4. ✅ 監視・ログ収集の検討
+# 2. 必読ドキュメント
+# - docker/README_DEV.md
+# - docs/test_specs/system_test_specification_20251123.md
+# - docs/reports/system_test_v3.7_complete_success_report_20251124.md
+
+# 3. テストコードを読む
+# tests/system/
+# tests/contradiction/
+
+# 4. 実装を確認
+# bridge/
+# memory_store/
+# context_assembler/
+```
 
 ---
 
@@ -478,6 +565,7 @@ docker-compose -f docker-compose.dev.yml down -v
 
 | 日付 | バージョン | 変更内容 |
 |------|-----------|---------|
+| 2025-11-24 | 1.1.0 | 開発環境と本番環境の違いを明確化、UIアクセス方法を追記 |
 | 2025-11-24 | 1.0.0 | 初版作成（古いCLI中心の説明を刷新） |
 
 ---
@@ -490,7 +578,15 @@ docker-compose -f docker-compose.dev.yml down -v
 
 ## 🔗 クイックリンク
 
+### 必読ドキュメント
+
+- **[現状報告](./CURRENT_STATUS.md)** - 開発環境と本番環境の違いを詳しく説明
+- **[開発環境ガイド](../../docker/README_DEV.md)** - Docker環境の詳細
+- **[テスト仕様書](../test_specs/system_test_specification_20251123.md)** - 総合テストの仕様
+- **[最新レポート](../reports/system_test_v3.7_complete_success_report_20251124.md)** - テスト完全成功レポート
+
+### その他
+
 - [プロジェクトルート](../../README.md)
-- [開発環境ガイド](../../docker/README_DEV.md)
-- [テスト仕様書](../test_specs/system_test_specification_20251123.md)
-- [最新レポート](../reports/system_test_v3.7_complete_success_report_20251124.md)
+- [アーキテクチャ](../output/resonant_total_architecture_yuno_hiroaki_full_2025-11-07.md)
+- [Sprint別レポート](../reports/)

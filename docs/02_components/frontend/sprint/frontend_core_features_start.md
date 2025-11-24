@@ -1,118 +1,349 @@
-# Frontend Core Features Implementation 作業開始指示書
+# Frontend Sprint 14 作業開始指示書
 
-## 概要
-
-**Sprint**: Frontend Core Features
-**タイトル**: Frontend Core Features Implementation
-**期間**: kiroペース（段階的実装）
-**目標**: フロントエンド実装率35% → 100%達成（バックエンド完全対応）
+**Sprint**: 14（フロントエンド拡張 Phase 1-2）
+**対象**: Kiro（Claude Sonnet 4.5）実装者
+**作成日**: 2025-11-24
+**バージョン**: 1.1
 
 ---
 
-## ⚠️ 重要事項（kiro特性対応）
+## ⚠️ 最重要警告（総合テストv3.7からの教訓）
 
-### 絶対遵守事項（MUST）
+### Kiro特性を考慮した絶対遵守事項
 
-1. **仕様書通りの実装を行うこと**
-   - 独自判断・改善提案・仕様変更を一切行わない
-   - 指定されたファイル配置・コンポーネント名・CSS class名を厳守
+総合テストv3.1〜v3.7の実施で判明したKiroの傾向に基づく警告：
 
-2. **段階的実装を行うこと**
-   - Phase順（1→2→3→4→5）で実装
-   - Phase完了前に次に進まない
+| 過去の問題 | 発生Sprint | 対策 |
+|-----------|-----------|------|
+| パスワードのハードコード | v3.4 | 環境変数を使用すること |
+| 独自判断でのテストスキップ | v3.5 | 仕様書の指示に厳密に従う |
+| Claude APIモデル名の間違い | v3.5-v3.6 | 本仕様書の値をそのまま使用 |
+| Messages API v2形式の誤り | v3.7 | API仕様を正確に理解する |
+| conftest.py重複作成 | v3.4 | 既存ファイルを確認してから作成 |
 
-3. **既存コードを破壊しないこと**
-   - 現在動作している機能（Messages, Intents, Specifications, Notifications）は変更しない
-   - 新規コンポーネントのみ追加
+### 絶対禁止事項（MUST NOT）
 
-### 禁止事項（MUST NOT）
+```
+❌ 禁止: APIエンドポイントを推測で作成
+   → 仕様書の「API一覧」セクションを参照すること
 
-| 禁止事項 | 理由 |
-|---------|------|
-| CSS class名変更 | Tailwind指定通り。デザインの一貫性確保 |
-| API URL変更 | 既存バックエンドAPI仕様に準拠 |
-| コンポーネント名変更 | ファイル管理・importの一貫性 |
-| 追加機能実装 | アニメーション・バリデーション等追加禁止 |
-| 型定義変更 | 既存interface定義改変禁止 |
-| ファイル場所変更 | 指定されたディレクトリ構造厳守 |
+❌ 禁止: 型定義を独自に変更
+   → 仕様書の型定義をそのままコピーすること
+
+❌ 禁止: 環境変数をハードコード
+   → import.meta.env.VITE_* を使用すること
+
+❌ 禁止: 既存のコンポーネントを変更
+   → 新規ファイルのみ追加すること
+
+❌ 禁止: 仕様書にない機能を追加
+   → アニメーション、バリデーション等の追加禁止
+
+❌ 禁止: any型の使用
+   → 明示的な型定義を使用すること
+```
 
 ---
 
-## Phase 1: 矛盾検出UI実装（最重要）
+## 1. 作業開始前の確認事項
 
-### 目標
-バックエンドの矛盾検出機能をフロントエンドで完全可視化
-
-### 実装ステップ
-
-#### Step 1: ディレクトリ・ファイル作成
+### 1.1 環境確認コマンド
 
 ```bash
-# 実行場所: /Users/zero/Projects/resonant-engine/frontend/
+# 1. フロントエンドディレクトリに移動
+cd frontend
 
-# ディレクトリ作成
-mkdir -p src/components/contradiction
+# 2. 依存関係インストール確認
+npm install
 
-# ファイル作成（この名前で作成すること）
-touch src/components/contradiction/ContradictionDashboard.tsx
-touch src/components/contradiction/ContradictionItem.tsx
-touch src/components/contradiction/ContradictionFilter.tsx
-touch src/components/contradiction/ContradictionResolution.tsx
+# 3. 開発サーバー起動確認
+npm run dev
+
+# 4. 既存ページが正常動作することを確認
+#    - http://localhost:5173/messages
+#    - http://localhost:5173/intents
+#    - http://localhost:5173/specifications
 ```
 
-#### Step 2: 型定義追加
+### 1.2 バックエンドAPI確認
 
-**ファイル**: `src/types/api.ts`（既存ファイルに追加）
+```bash
+# Dashboard Backend確認（基本CRUD）
+curl http://localhost:8000/api/messages
+
+# Bridge API確認（高度機能）
+# ※ 矛盾検出APIはDBプール依存のため、エンドポイント存在確認のみ
+curl -I http://localhost:8000/api/v1/contradiction/pending
+```
+
+### 1.3 既存ファイル構造確認
+
+```bash
+# 現在のフロントエンド構造を確認
+ls -la frontend/src/
+ls -la frontend/src/components/
+ls -la frontend/src/types/
+ls -la frontend/src/api/
+```
+
+**重要**: 既存ファイルは変更しない。新規ファイルのみ追加。
+
+---
+
+## 2. Phase 1: 矛盾検出UI実装手順
+
+### Step 1: 型定義ファイル作成
+
+**ファイル**: `frontend/src/types/contradiction.ts`
+
+```bash
+# ディレクトリ確認（typesディレクトリが存在するか）
+ls frontend/src/types/
+
+# ファイル作成
+touch frontend/src/types/contradiction.ts
+```
+
+**内容**: 仕様書「2.1 Contradiction型」のコードをそのままコピー
 
 ```typescript
-// ContradictionResponseインターフェースを追加
-export interface ContradictionResponse {
-  id: number;
-  level: 'error' | 'warning' | 'info';
-  message: string;
-  created_at: string;
-  resolved: boolean;
-  confidence_score?: number;
-  related_intent_ids?: number[];
+// frontend/src/types/contradiction.ts
+// 以下を仕様書からそのままコピー
+
+export type ContradictionType =
+  | 'tech_stack'
+  | 'policy_shift'
+  | 'duplicate'
+  | 'dogma';
+
+export type ResolutionStatus = 'pending' | 'resolved' | 'dismissed';
+
+export type ResolutionAction = 'policy_change' | 'mistake' | 'coexist';
+
+export interface Contradiction {
+  id: string;
+  user_id: string;
+  new_intent_id: string;
+  new_intent_content: string;
+  conflicting_intent_id: string | null;
+  conflicting_intent_content: string | null;
+  contradiction_type: ContradictionType;
+  confidence_score: number;
+  detected_at: string;
+  details: Record<string, unknown>;
+  resolution_status: ResolutionStatus;
+  resolution_action: ResolutionAction | null;
+  resolution_rationale: string | null;
+  resolved_at: string | null;
 }
 
-// システムメトリクス用（Phase 3で使用）
-export interface SystemMetrics {
-  messages_count: number;
-  intents_count: number;
-  contradictions_count: number;
-  crisis_index: number;
-  uptime_percentage: number;
-  memory_usage_mb?: number;
+export interface CheckContradictionRequest {
+  user_id: string;
+  intent_id: string;
+  intent_content: string;
+}
+
+export interface ResolveContradictionRequest {
+  resolution_action: ResolutionAction;
+  resolution_rationale: string;
+  resolved_by: string;
+}
+
+export interface ContradictionListResponse {
+  contradictions: Contradiction[];
+  total: number;
 }
 ```
 
-#### Step 3: ContradictionDashboard.tsx 実装
+### Step 2: API関数ファイル作成
 
-**ファイル**: `src/components/contradiction/ContradictionDashboard.tsx`
+**ファイル**: `frontend/src/api/contradiction.ts`
+
+```bash
+touch frontend/src/api/contradiction.ts
+```
+
+**内容**: 仕様書「3.2 API呼び出し関数」のコードをそのままコピー
 
 ```typescript
-import React from 'react';
-import { useQuery } from 'react-query';
+// frontend/src/api/contradiction.ts
+
 import axios from 'axios';
+import type {
+  ContradictionListResponse,
+  CheckContradictionRequest,
+  ResolveContradictionRequest
+} from '../types/contradiction';
+
+const BRIDGE_API_URL = import.meta.env.VITE_BRIDGE_API_URL || 'http://localhost:8000';
+
+export async function getPendingContradictions(
+  userId: string
+): Promise<ContradictionListResponse> {
+  const response = await axios.get<ContradictionListResponse>(
+    `${BRIDGE_API_URL}/api/v1/contradiction/pending`,
+    { params: { user_id: userId } }
+  );
+  return response.data;
+}
+
+export async function checkIntentContradiction(
+  request: CheckContradictionRequest
+): Promise<ContradictionListResponse> {
+  const response = await axios.post<ContradictionListResponse>(
+    `${BRIDGE_API_URL}/api/v1/contradiction/check`,
+    request
+  );
+  return response.data;
+}
+
+export async function resolveContradiction(
+  contradictionId: string,
+  request: ResolveContradictionRequest
+): Promise<{ status: string }> {
+  const response = await axios.put<{ status: string }>(
+    `${BRIDGE_API_URL}/api/v1/contradiction/${contradictionId}/resolve`,
+    request
+  );
+  return response.data;
+}
+```
+
+### Step 3: コンポーネントディレクトリ作成
+
+```bash
+mkdir -p frontend/src/components/contradiction
+touch frontend/src/components/contradiction/ContradictionDashboard.tsx
+touch frontend/src/components/contradiction/ContradictionItem.tsx
+```
+
+### Step 4: ContradictionItem.tsx 実装
+
+```typescript
+// frontend/src/components/contradiction/ContradictionItem.tsx
+
+import React from 'react';
+import type { Contradiction } from '../../types/contradiction';
+
+interface ContradictionItemProps {
+  contradiction: Contradiction;
+  onResolve?: (id: string) => void;
+}
+
+// 矛盾タイプに応じた色を返す（仕様書の色指定に厳密に従う）
+const getTypeStyles = (type: string): string => {
+  switch (type) {
+    case 'tech_stack':
+      return 'border-red-500 bg-red-50';
+    case 'policy_shift':
+      return 'border-orange-500 bg-orange-50';
+    case 'duplicate':
+      return 'border-yellow-500 bg-yellow-50';
+    case 'dogma':
+      return 'border-blue-500 bg-blue-50';
+    default:
+      return 'border-gray-500 bg-gray-50';
+  }
+};
+
+const getTypeLabel = (type: string): string => {
+  switch (type) {
+    case 'tech_stack': return '技術スタック矛盾';
+    case 'policy_shift': return 'ポリシー転換';
+    case 'duplicate': return '重複作業';
+    case 'dogma': return 'ドグマ検出';
+    default: return type;
+  }
+};
+
+const ContradictionItem: React.FC<ContradictionItemProps> = ({
+  contradiction,
+  onResolve
+}) => {
+  return (
+    <div className={`p-4 border-2 rounded-lg ${getTypeStyles(contradiction.contradiction_type)}`}>
+      {/* ヘッダー */}
+      <div className="flex justify-between items-start mb-2">
+        <span className="text-sm font-semibold">
+          {getTypeLabel(contradiction.contradiction_type)}
+        </span>
+        <span className="text-xs text-gray-500">
+          {new Date(contradiction.detected_at).toLocaleDateString('ja-JP')}
+        </span>
+      </div>
+
+      {/* 内容 */}
+      <p className="text-sm mb-2 text-gray-800">
+        {contradiction.new_intent_content}
+      </p>
+
+      {/* 信頼度 */}
+      <div className="mb-2">
+        <div className="flex justify-between text-xs text-gray-600 mb-1">
+          <span>信頼度</span>
+          <span>{(contradiction.confidence_score * 100).toFixed(0)}%</span>
+        </div>
+        <div className="h-2 bg-gray-200 rounded">
+          <div
+            className="h-2 bg-blue-500 rounded"
+            style={{ width: `${contradiction.confidence_score * 100}%` }}
+          />
+        </div>
+      </div>
+
+      {/* ステータス */}
+      <div className="flex justify-between items-center">
+        <span className={`text-xs px-2 py-1 rounded ${
+          contradiction.resolution_status === 'resolved'
+            ? 'bg-green-100 text-green-800'
+            : contradiction.resolution_status === 'dismissed'
+            ? 'bg-gray-100 text-gray-800'
+            : 'bg-red-100 text-red-800'
+        }`}>
+          {contradiction.resolution_status === 'resolved' ? '解決済み' :
+           contradiction.resolution_status === 'dismissed' ? '却下' : '未解決'}
+        </span>
+
+        {contradiction.resolution_status === 'pending' && onResolve && (
+          <button
+            onClick={() => onResolve(contradiction.id)}
+            className="text-xs bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
+          >
+            解決
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ContradictionItem;
+```
+
+### Step 5: ContradictionDashboard.tsx 実装
+
+```typescript
+// frontend/src/components/contradiction/ContradictionDashboard.tsx
+
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { getPendingContradictions } from '../../api/contradiction';
 import ContradictionItem from './ContradictionItem';
-import type { ContradictionResponse } from '../../types/api';
 
 const ContradictionDashboard: React.FC = () => {
-  const { data: contradictions, isLoading, error } = useQuery(
-    'contradictions',
-    () => axios.get<ContradictionResponse[]>('/api/contradictions/').then(res => res.data),
-    {
-      refetchInterval: 5000, // Phase 2でWebSocketに切り替え予定
-      staleTime: 0,
-      cacheTime: 0
-    }
-  );
+  // TODO: 実際のユーザーIDを取得する仕組みが必要
+  const userId = 'default';
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['contradictions', userId],
+    queryFn: () => getPendingContradictions(userId),
+    refetchInterval: 5000, // 5秒間隔で更新（Phase 2でWebSocket化予定）
+  });
 
   if (isLoading) {
     return (
       <div className="p-6">
-        <div className="text-center">Loading...</div>
+        <div className="text-center text-gray-500">読み込み中...</div>
       </div>
     );
   }
@@ -127,13 +358,15 @@ const ContradictionDashboard: React.FC = () => {
     );
   }
 
+  const contradictions = data?.contradictions ?? [];
+
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">矛盾検出ダッシュボード</h1>
 
-      {contradictions && contradictions.length > 0 ? (
-        <div className="grid grid-cols-3 gap-4">
-          {contradictions.map(contradiction => (
+      {contradictions.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {contradictions.map((contradiction) => (
             <ContradictionItem
               key={contradiction.id}
               contradiction={contradiction}
@@ -141,7 +374,7 @@ const ContradictionDashboard: React.FC = () => {
           ))}
         </div>
       ) : (
-        <div className="text-center text-gray-500">
+        <div className="text-center text-gray-500 py-8">
           現在、検出された矛盾はありません。
         </div>
       )}
@@ -152,97 +385,31 @@ const ContradictionDashboard: React.FC = () => {
 export default ContradictionDashboard;
 ```
 
-#### Step 4: ContradictionItem.tsx 実装
+### Step 6: ルーティング追加
 
-**ファイル**: `src/components/contradiction/ContradictionItem.tsx`
-
-```typescript
-import React from 'react';
-import type { ContradictionResponse } from '../../types/api';
-
-interface ContradictionItemProps {
-  contradiction: ContradictionResponse;
-}
-
-const getLevelColor = (level: string) => {
-  switch (level) {
-    case 'error': return 'border-red-500 bg-red-50';
-    case 'warning': return 'border-yellow-500 bg-yellow-50';
-    case 'info': return 'border-blue-500 bg-blue-50';
-    default: return 'border-gray-500 bg-gray-50';
-  }
-};
-
-const getLevelTextColor = (level: string) => {
-  switch (level) {
-    case 'error': return 'text-red-800';
-    case 'warning': return 'text-yellow-800';
-    case 'info': return 'text-blue-800';
-    default: return 'text-gray-800';
-  }
-};
-
-const ContradictionItem: React.FC<ContradictionItemProps> = ({ contradiction }) => {
-  return (
-    <div className={`p-4 border-2 rounded-lg ${getLevelColor(contradiction.level)}`}>
-      <div className="flex justify-between items-start mb-2">
-        <span className={`text-sm font-semibold ${getLevelTextColor(contradiction.level)}`}>
-          {contradiction.level.toUpperCase()}
-        </span>
-        <span className="text-xs text-gray-500">
-          {new Date(contradiction.created_at).toLocaleDateString('ja-JP')}
-        </span>
-      </div>
-
-      <p className="text-sm mb-3 text-gray-900">{contradiction.message}</p>
-
-      <div className="flex justify-between items-center">
-        <div>
-          {contradiction.resolved ? (
-            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-              解決済み
-            </span>
-          ) : (
-            <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
-              未解決
-            </span>
-          )}
-        </div>
-
-        {contradiction.confidence_score && (
-          <span className="text-xs text-gray-600">
-            信頼度: {(contradiction.confidence_score * 100).toFixed(0)}%
-          </span>
-        )}
-      </div>
-    </div>
-  );
-};
-
-export default ContradictionItem;
-```
-
-#### Step 5: ルーティング設定
-
-**ファイル**: `src/App.tsx` の既存Routes内に追加
+**ファイル**: `frontend/src/App.tsx`（既存ファイルに追加）
 
 ```typescript
-// Importセクションに追加
+// 1. importセクションに追加
 import ContradictionDashboard from './components/contradiction/ContradictionDashboard';
 
-// <Routes>内の適切な場所に追加（既存のRouteの後）
+// 2. <Routes>内に追加（既存のRouteの後ろ）
 <Route path="/contradictions" element={<ContradictionDashboard />} />
 ```
 
-#### Step 6: ナビゲーション追加
+### Step 7: ナビゲーション追加
 
-既存のナビゲーションコンポーネント（通常は Header.tsx または Navbar.tsx）に追加:
+既存のナビゲーションコンポーネント（Sidebar.tsx等）に追加：
 
 ```typescript
 // ナビゲーションリンクに追加
 <Link
   to="/contradictions"
-  className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+  className={`flex items-center px-4 py-2 text-sm ${
+    location.pathname === '/contradictions'
+      ? 'bg-gray-700 text-white'
+      : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+  }`}
 >
   矛盾検出
 </Link>
@@ -250,106 +417,118 @@ import ContradictionDashboard from './components/contradiction/ContradictionDash
 
 ---
 
-## Phase 1 実装確認チェックリスト
-
-完了前に以下を確認すること：
+## 3. Phase 1 完了確認チェックリスト
 
 ### ファイル作成確認
+
+```bash
+# 以下のファイルが存在することを確認
+ls frontend/src/types/contradiction.ts
+ls frontend/src/api/contradiction.ts
+ls frontend/src/components/contradiction/ContradictionDashboard.tsx
+ls frontend/src/components/contradiction/ContradictionItem.tsx
+```
+
+- [ ] `src/types/contradiction.ts` 作成済み
+- [ ] `src/api/contradiction.ts` 作成済み
 - [ ] `src/components/contradiction/ContradictionDashboard.tsx` 作成済み
 - [ ] `src/components/contradiction/ContradictionItem.tsx` 作成済み
-- [ ] `src/types/api.ts` にContradictionResponse型追加済み
 
-### 機能確認
-- [ ] `npm run dev` でエラーなく起動
-- [ ] `/contradictions` ページにアクセス可能
-- [ ] ナビゲーションリンクから遷移可能
-- [ ] APIエラー時に適切なエラーメッセージ表示
-- [ ] データがない場合に適切なメッセージ表示
+### 動作確認
+
+```bash
+# TypeScriptコンパイルエラーがないことを確認
+npm run build
+
+# 開発サーバーで動作確認
+npm run dev
+```
+
+- [ ] `npm run build` がエラーなく完了
+- [ ] `http://localhost:5173/contradictions` にアクセス可能
+- [ ] ナビゲーションから遷移可能
+- [ ] 既存ページ（messages, intents, specifications）が正常動作
 
 ### UI確認
-- [ ] グリッド3列レイアウト表示
-- [ ] 矛盾レベルによる色分け（error=赤、warning=黄、info=青）
-- [ ] 解決ステータス表示（解決済み/未解決）
-- [ ] 作成日時表示
-- [ ] 信頼度スコア表示（存在する場合）
+
+- [ ] グリッドレイアウト（1/2/3列レスポンシブ）表示
+- [ ] 矛盾タイプごとの色分け表示
+- [ ] 信頼度バー表示
+- [ ] 解決ステータス表示
+- [ ] エラー時のメッセージ表示
+- [ ] データなし時のメッセージ表示
 
 ---
 
-## Phase 1 完了後の報告事項
-
-以下の内容を報告すること：
-
-1. **実装完了ファイル一覧**
-   - 作成したファイルパスとファイルサイズ
-
-2. **動作確認結果**
-   - ローカル開発サーバーでの動作状況
-   - エラーの有無
-   - UIの表示状況
-
-3. **発見した問題・困った点**
-   - 仕様書と実際の差異
-   - 想定外のエラー
-   - 判断に迷った点
-
-4. **次フェーズへの準備状況**
-   - Phase 1が完全に動作すること
-   - 既存機能に影響がないこと
-
----
-
-## デバッグ時の対応
-
-### API接続エラーが発生した場合
-
-1. **バックエンドサーバーの起動確認**
-   ```bash
-   curl http://localhost:8000/health
-   ```
-
-2. **Contradiction APIエンドポイント確認**
-   ```bash
-   curl http://localhost:8000/api/contradictions/
-   ```
-
-3. **ネットワークタブでHTTPステータス確認**
-   - 200: 正常
-   - 404: エンドポイントが見つからない → バックエンド実装確認
-   - 500: サーバーエラー → バックエンドログ確認
+## 4. 困った時の対処法
 
 ### TypeScriptエラーが発生した場合
 
-1. **型定義の確認**
-   - `src/types/api.ts` にContradictionResponse型が正しく定義されているか
+```bash
+# 型定義の確認
+cat frontend/src/types/contradiction.ts
 
-2. **import文の確認**
-   - 相対パス（`../../types/api`）が正しいか
+# import文のパス確認
+# 相対パスが正しいか確認
+```
 
-3. **コンパイルエラーの解決**
-   ```bash
-   npm run type-check
-   ```
+### API接続エラーが発生した場合
+
+```bash
+# 1. バックエンド起動確認
+curl http://localhost:8000/health
+
+# 2. APIエンドポイント確認
+curl http://localhost:8000/api/v1/contradiction/pending
+
+# 3. 環境変数確認
+cat frontend/.env.local
+```
+
+### 既存機能が壊れた場合
+
+```bash
+# git diffで変更箇所を確認
+git diff frontend/src/App.tsx
+
+# 既存ファイルへの変更は最小限（import追加とRoute追加のみ）であることを確認
+```
 
 ---
 
-## Phase 2以降の準備
+## 5. Phase 1完了後の報告事項
 
-Phase 1完了後、以下の準備を行う：
+以下の内容を報告すること：
 
-### Phase 2 (WebSocket統合) 準備事項
-- WebSocketライブラリ選定（推奨: native WebSocket API）
-- 環境変数設定（VITE_WS_URL）
-- 既存ポーリングの特定
+1. **作成ファイル一覧**
+   - ファイルパスとファイルサイズ
 
-### Phase 3 (Dashboard Analytics) 準備事項
-- システムメトリクス取得API確認
-- グラフライブラリ選定（推奨: Chart.js または Recharts）
+2. **動作確認結果**
+   - `npm run build` 結果
+   - ブラウザでの動作確認結果
+
+3. **スクリーンショット**
+   - 矛盾検出ダッシュボード画面
+   - エラー状態画面（APIエラー時）
+   - データなし状態画面
+
+4. **発見した問題**
+   - 仕様書との差異
+   - 追加で必要な対応
 
 ---
 
-**注意**: Phase 1が完全に動作することを確認してから次のPhaseに進むこと。不具合がある状態で進めてはならない。
+## 6. Phase 2への移行条件
 
-**作成者**: Claude Sonnet 4 (Kana)
-**作成日**: 2025-11-24
-**対象**: kiro実装者
-**重要度**: 最高（プロジェクト成功の鍵）
+**Phase 1が完全に動作することを確認してからPhase 2に進むこと**
+
+Phase 2開始条件：
+- [ ] Phase 1チェックリスト全項目完了
+- [ ] 既存機能に影響なし
+- [ ] `npm run build` エラーなし
+
+---
+
+**作成者**: Claude Code
+**レビュー日**: 2025-11-24
+**対象**: Kiro（Claude Sonnet 4.5）

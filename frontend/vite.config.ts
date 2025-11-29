@@ -10,6 +10,11 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      // ⚠️ WebSocketプロキシ設定（Sprint 15）
+      '/ws': {
+        target: 'ws://localhost:8000',
+        ws: true,
+      },
     },
   },
 })

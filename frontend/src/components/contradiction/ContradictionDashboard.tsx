@@ -9,16 +9,25 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getPendingContradictions } from '../../api/contradiction';
 import ContradictionItem from './ContradictionItem';
+import { useWebSocket } from '../../hooks/useWebSocket';
 
 const ContradictionDashboard: React.FC = () => {
+  // WebSocket接続（リアルタイム更新用）
+  const { connectionState } = useWebSocket();
+  
   // TODO: 実際のユーザーIDを取得する仕組みが必要
   // 現在はデフォルト値を使用
   const userId = 'default';
 
+  // WebSocket失敗時のみポーリング有効化
+  const shouldPoll = connectionState.status === 'failed';
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['contradictions', userId],
     queryFn: () => getPendingContradictions(userId),
-    refetchInterval: 5000, // 5秒間隔で更新（Phase 2でWebSocket化予定）
+    // WebSocket失敗時のみ5秒ポーリング
+    refetchInterval: shouldPoll ? 5000 : false,
+    refetchOnWindowFocus: shouldPoll,
   });
 
   if (isLoading) {

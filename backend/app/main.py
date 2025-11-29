@@ -80,6 +80,11 @@ app.include_router(specifications.router)
 app.include_router(intents.router)
 app.include_router(notifications.router)
 
+# WebSocket router (Sprint 15)
+from app.routers import websocket
+app.include_router(websocket.router)
+logger.info("✅ WebSocket router registered")
+
 
 @app.get("/health")
 async def health_check():

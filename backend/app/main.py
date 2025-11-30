@@ -6,7 +6,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.database import db
 from app.config import settings
-from app.routers import messages, specifications, intents, notifications
+from app.routers import (
+    messages, 
+    specifications, 
+    intents, 
+    notifications, 
+    contradictions,
+    re_evaluation,
+    choice_points,
+    memory_lifecycle,
+    dashboard_analytics
+)
 
 # Configure logging
 logging.basicConfig(
@@ -79,6 +89,14 @@ app.include_router(messages.router)
 app.include_router(specifications.router)
 app.include_router(intents.router)
 app.include_router(notifications.router)
+app.include_router(contradictions.router)
+
+# 🆕 高度機能ルーター
+app.include_router(re_evaluation.router)
+app.include_router(choice_points.router)  # ✅ 有効化
+app.include_router(memory_lifecycle.router)
+app.include_router(dashboard_analytics.router)
+logger.info("✅ Advanced feature routers registered")
 
 # WebSocket router (Sprint 15)
 from app.routers import websocket

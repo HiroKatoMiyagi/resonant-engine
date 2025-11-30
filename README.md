@@ -51,6 +51,12 @@ $ python utils/trace_events.py causality <EventID>
 - [Notion統合サマリー](docs/notion_integration_summary.md)
 - [環境変数テンプレート](docs/env_template.txt)
 
+### API Documentation
+
+Backend API（全機能統合）: http://localhost:8000/docs
+
+すべてのエンドポイント（基本CRUD、矛盾検出、メモリ管理、ダッシュボード分析等）が単一のAPIで提供されます。
+
 ---
 
 **Author:** 宏啓 加藤 (Hiroaki Kato)  

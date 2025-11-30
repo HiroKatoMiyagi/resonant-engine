@@ -71,3 +71,8 @@ export interface NotificationListResponse {
   limit: number;
   offset: number;
 }
+
+// 🆕 Advanced Features Types
+export * from './contradiction';
+export * from './memory';
+export * from './dashboard';

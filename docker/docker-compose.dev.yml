@@ -15,7 +15,7 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
-      - ./postgres:/docker-entrypoint-initdb.d:ro
+      - ./postgres/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-resonant} -d ${POSTGRES_DB:-postgres}"]
       interval: 10s

@@ -106,15 +106,13 @@ class ContradictionDetector:
             # Note: Assume 'intents' table exists from previous sprints
             past_intents = await conn.fetch(
                 """
-                SELECT id, content, created_at
+                SELECT id, intent_text as content, created_at
                 FROM intents
-                WHERE user_id = $1
-                  AND id != $2
+                WHERE id != $1
                   AND (status IS NULL OR status != 'deprecated')
                 ORDER BY created_at DESC
                 LIMIT 50
             """,
-                user_id,
                 new_intent_id,
             )
 
@@ -202,15 +200,13 @@ class ContradictionDetector:
             )
             past_intents = await conn.fetch(
                 """
-                SELECT id, content, created_at
+                SELECT id, intent_text as content, created_at
                 FROM intents
-                WHERE user_id = $1
-                  AND id != $2
-                  AND created_at > $3
+                WHERE id != $1
+                  AND created_at > $2
                   AND (status IS NULL OR status != 'deprecated')
                 ORDER BY created_at DESC
             """,
-                user_id,
                 new_intent_id,
                 cutoff_date,
             )
@@ -252,15 +248,13 @@ class ContradictionDetector:
         async with self.pool.acquire() as conn:
             past_intents = await conn.fetch(
                 """
-                SELECT id, content, created_at, status
+                SELECT id, intent_text as content, created_at, status
                 FROM intents
-                WHERE user_id = $1
-                  AND id != $2
+                WHERE id != $1
                   AND (status = 'completed' OR status = 'in_progress')
                 ORDER BY created_at DESC
                 LIMIT 30
             """,
-                user_id,
                 new_intent_id,
             )
 

@@ -40,58 +40,95 @@
 
 ---
 
-## 0. バックエンドAPI構成（重要）
+## 0. バックエンドAPI構成
 
-### 2つのバックエンドが存在する
+### 統一されたBackend API
+
+Resonant EngineのバックエンドAPIは、**単一のFastAPIアプリケーション**で全機能を提供します。
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Dashboard Backend (backend/app/)                            │
+│ Backend API (backend/app/)                                  │
 │ ・ポート: 8000                                               │
-│ ・基本CRUD機能（Messages, Intents, Specifications等）        │
-│ ・プレフィックス: /api/                                      │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│ Bridge API (bridge/api/)                                     │
-│ ・ポート: 設定依存（通常8001または同一8000）                   │
-│ ・高度機能（Contradiction, Re-evaluation, WebSocket, SSE）   │
-│ ・プレフィックス: /api/v1/                                   │
+│ ・すべての機能が統合されています                               │
+│   - 基本CRUD機能（Messages, Intents, Specifications等）      │
+│   - 高度機能（Contradiction, Re-evaluation, Memory等）       │
+│   - WebSocket通信                                           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### API一覧（変更禁止）
+### APIエンドポイント構成
 
-#### Dashboard API (`/api/`)
+```plaintext
+Frontend
+  └─ Backend API (http://localhost:8000)
+      ├─ 基本CRUD
+      │   ├─ /api/messages
+      │   ├─ /api/intents
+      │   ├─ /api/specifications
+      │   └─ /api/notifications
+      │
+      ├─ 高度機能
+      │   ├─ /api/v1/contradiction/*      (矛盾検出)
+      │   ├─ /api/v1/intent/reeval        (再評価)
+      │   ├─ /api/v1/memory/choice-points/* (選択保存)
+      │   ├─ /api/v1/memory/lifecycle/*   (メモリライフサイクル)
+      │   └─ /api/v1/dashboard/*          (ダッシュボード分析)
+      │
+      └─ WebSocket
+          └─ /ws/intents                   (リアルタイム通知)
+```
+
+### エンドポイント一覧
+
+#### 基本CRUD (既存)
 ```
 GET    /api/messages           - メッセージ一覧
 POST   /api/messages           - メッセージ作成
 GET    /api/intents            - Intent一覧
 POST   /api/intents            - Intent作成
+GET    /api/specifications     - 仕様書一覧
+POST   /api/specifications     - 仕様書作成
 GET    /api/notifications      - 通知一覧
 ```
 
-#### Bridge API (`/api/v1/`)
+#### Contradiction Detection (統合済み)
 ```
-# Contradiction Detection
 POST   /api/v1/contradiction/check           - 矛盾チェック
 GET    /api/v1/contradiction/pending         - 未解決矛盾一覧
 PUT    /api/v1/contradiction/{id}/resolve    - 矛盾解決
+```
 
-# Re-evaluation
+#### Re-evaluation (統合済み)
+```
 POST   /api/v1/intent/reeval                 - Intent再評価
+```
 
-# Dashboard Analytics
+#### Choice Preservation (統合済み)
+```
+GET    /api/v1/memory/choice-points/pending  - 未決定選択肢取得
+POST   /api/v1/memory/choice-points/         - 選択肢作成
+PUT    /api/v1/memory/choice-points/{id}/decide - 選択決定
+GET    /api/v1/memory/choice-points/search   - 選択肢検索
+```
+
+#### Memory Lifecycle (統合済み)
+```
+GET    /api/v1/memory/lifecycle/status       - メモリステータス取得
+POST   /api/v1/memory/lifecycle/compress     - メモリ圧縮
+DELETE /api/v1/memory/lifecycle/expired      - 期限切れクリーンアップ
+```
+
+#### Dashboard Analytics (統合済み)
+```
 GET    /api/v1/dashboard/overview            - システム概要
 GET    /api/v1/dashboard/timeline            - タイムライン
+GET    /api/v1/dashboard/corrections         - 修正履歴
+```
 
-# Memory/Choice Preservation
-GET    /api/v1/memory/choice-points/pending  - 未決定選択肢
-POST   /api/v1/memory/choice-points          - 選択肢作成
-PUT    /api/v1/memory/choice-points/{id}/decide - 選択決定
-
-# WebSocket
-WS     /ws/intents                           - Intent更新通知
+#### WebSocket (既存)
+```
+WS     /ws/intents                           - Intent更新リアルタイム通知
 ```
 
 ---

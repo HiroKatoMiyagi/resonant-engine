@@ -1,11 +1,29 @@
 from uuid import UUID
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends, BackgroundTasks
 from app.models.intent import IntentCreate, IntentUpdate, IntentStatusUpdate, IntentResponse, IntentListResponse
 from app.repositories.intent_repo import IntentRepository
+from app.dependencies import get_term_drift_detector
+from app.services.term_drift.detector import TermDriftDetector
 
 router = APIRouter(prefix="/api/intents", tags=["intents"])
 repo = IntentRepository()
+
+
+async def analyze_intent_terms_task(
+    user_id: str,
+    text: str,
+    source_id: str,
+    detector: TermDriftDetector
+):
+    """Background task to analyze terms in new intent"""
+    try:
+        terms = await detector.extract_terms_from_text(text, f"Intent:{source_id}")
+        for term in terms:
+            await detector.register_term_definition(user_id, term)
+    except Exception as e:
+        # Log error but don't fail the request
+        print(f"Error analyzing intent terms: {e}")
 
 
 @router.get("", response_model=IntentListResponse)
@@ -31,9 +49,30 @@ async def get_intent(id: UUID):
 
 
 @router.post("", response_model=IntentResponse, status_code=201)
-async def create_intent(data: IntentCreate):
+async def create_intent(
+    data: IntentCreate,
+    background_tasks: BackgroundTasks,
+    detector: TermDriftDetector = Depends(get_term_drift_detector)
+):
     """Create a new intent"""
-    return await repo.create(data)
+    intent = await repo.create(data)
+    
+    # ユーザーIDがIntenCreateに含まれていない場合（System等の場合）はデフォルト値を使用するか、
+    # IntentResponseから取得する（今のIntentResponseにはsession_idはあるがuser_idはないかも？）
+    # Repositoryのcreate実装を見ると、System Default Sessionを使っている。
+    # 簡易的に "system_user" または data内の情報を使う。
+    # ここでは仮に "system" とする。実際のUser Contextが必要だが、現状のAPIにはUser情報がない。
+    user_id = "system" 
+    
+    background_tasks.add_task(
+        analyze_intent_terms_task,
+        user_id,
+        data.intent_text,
+        str(intent.id),
+        detector
+    )
+    
+    return intent
 
 
 @router.put("/{id}", response_model=IntentResponse)

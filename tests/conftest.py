@@ -55,4 +55,33 @@ async def db_pool():
     
     yield pool
     
+    
     await pool.close()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def test_client(db_pool):
+    """
+    Async test client for integration tests.
+    Ensures DB is connected.
+    """
+    from httpx import AsyncClient, ASGITransport
+    from app.main import app
+    from app.database import db
+    from app.dependencies import get_term_drift_detector, get_temporal_constraint_checker
+    
+    # Patch db.pool
+    original_pool = db.pool
+    db.pool = db_pool
+    
+    # Clear lru_cache to ensure new instances with correct pool are created
+    get_term_drift_detector.cache_clear()
+    get_temporal_constraint_checker.cache_clear()
+    
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        yield client
+    
+    db.pool = original_pool
+    # Clear again to cleanup
+    get_term_drift_detector.cache_clear()
+    get_temporal_constraint_checker.cache_clear()

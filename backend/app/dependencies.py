@@ -180,3 +180,25 @@ def create_bridge_set(
 async def get_bridge_set() -> BridgeSet:
     """BridgeSet取得（Re-evaluation用）"""
     return create_bridge_set()
+
+
+# ========================================
+# Sprint 12 Dependencies
+# ========================================
+
+from app.services.term_drift.detector import TermDriftDetector
+from app.services.temporal_constraint.checker import TemporalConstraintChecker
+
+@lru_cache
+def get_term_drift_detector() -> TermDriftDetector:
+    """Term Drift Detector取得"""
+    # Note: db.pool might not be available if not running in async context where db is initialized
+    # But for dependencies, we assume app startup has happened or db is accessible.
+    # However, db.pool is an asyncpg.Pool.
+    # We should ensure db is imported correctly.
+    return TermDriftDetector(db.pool)
+
+@lru_cache
+def get_temporal_constraint_checker() -> TemporalConstraintChecker:
+    """Temporal Constraint Checker取得"""
+    return TemporalConstraintChecker(db.pool)

@@ -98,6 +98,12 @@ app.include_router(memory_lifecycle.router)
 app.include_router(dashboard_analytics.router)
 logger.info("✅ Advanced feature routers registered")
 
+# 🆕 Sprint 12 Routers
+from app.routers import term_drift, temporal_constraint
+app.include_router(term_drift.router)
+app.include_router(temporal_constraint.router)
+logger.info("✅ Term Drift & Temporal Constraint routers registered")
+
 # WebSocket router (Sprint 15)
 from app.routers import websocket
 app.include_router(websocket.router)

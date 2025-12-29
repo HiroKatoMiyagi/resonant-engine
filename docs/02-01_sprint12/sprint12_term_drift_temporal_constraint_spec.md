@@ -1491,7 +1491,137 @@ temporal_constraint_blocks: Counter  # ブロック数
 
 ---
 
-## 10. 参考資料
+## 10. アーキテクチャ制約と利用規約ベースアプローチ
+
+### 10.1 アーキテクチャ上の制約
+
+**制約の背景:**
+
+現在のResonant Engineには、ソースコードの変更を行うための統一的なAPI（例: `FileModificationService`）が存在していません。AIエージェントやユーザーがファイルシステムを直接操作したり、様々な手段でファイルを書き換える可能性があるため、「あらゆるファイル変更の前に必ずTemporal Constraint Checkを通過させる」という仕組みをコードレベルで強制することが現状のアーキテクチャでは不可能です。
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    現状のファイルアクセス                      │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌─────────┐    直接アクセス    ┌──────────────────┐        │
+│  │ AIエージェント │ ─────────────────→ │   ファイルシステム   │        │
+│  └─────────┘                    └──────────────────┘        │
+│                                           ↑                 │
+│  ┌─────────┐    直接アクセス              │                 │
+│  │   IDE    │ ─────────────────────────────┘                 │
+│  └─────────┘                                                │
+│                                           ↑                 │
+│  ┌─────────┐    直接アクセス              │                 │
+│  │   CLI   │ ─────────────────────────────┘                 │
+│  └─────────┘                                                │
+│                                                              │
+│  ⚠️ 制約チェックを強制できない                                │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 10.2 利用規約ベースアプローチ（採用方針）
+
+**方針:**
+
+コードレベルでの強制ではなく、ファイル変更を行うクライアント（AIエージェント、IDEプラグイン、開発者）が**自主的に**制約チェックAPIを呼び出す「利用規約ベース」のアプローチを採用します。
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                 利用規約ベースアプローチ                        │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌─────────┐  1. チェック依頼  ┌──────────────────┐          │
+│  │ AIエージェント │ ────────────────→ │ Temporal Constraint │          │
+│  │ (協力的)  │ ←──────────────── │       API         │          │
+│  └─────────┘  2. 結果・警告    └──────────────────┘          │
+│       │                                                      │
+│       │ 3. 承認後のみ書き込み                                  │
+│       ↓                                                      │
+│  ┌──────────────────┐                                        │
+│  │   ファイルシステム   │                                        │
+│  └──────────────────┘                                        │
+│                                                              │
+│  ✅ 協力的なクライアントは制約を遵守                            │
+│  ⚠️ 非協力的なクライアントは制約をバイパス可能                    │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 10.3 提供するツールとAPI
+
+#### API エンドポイント
+
+| エンドポイント | 用途 |
+|---------------|------|
+| `POST /api/v1/temporal-constraint/check` | ファイル変更前の制約チェック |
+| `POST /api/v1/temporal-constraint/verify` | ファイル検証の登録 |
+| `POST /api/v1/temporal-constraint/mark-stable` | 安定稼働マーク |
+| `POST /api/v1/temporal-constraint/upgrade-critical` | CRITICALレベルへ昇格 |
+
+#### CLI ツール（AIエージェント向け推奨）
+
+```bash
+# ファイル変更前の制約チェック
+python utils/temporal_constraint_cli.py check --file path/to/file.py
+
+# 制約チェック付きでファイル書き込み（AIエージェント向け推奨）
+python utils/temporal_constraint_cli.py write --file path/to/file.py --reason "バグ修正: #123"
+
+# ファイルを検証済みとして登録
+python utils/temporal_constraint_cli.py verify --file path/to/file.py --hours 10 --level high
+
+# 登録済みファイル一覧
+python utils/temporal_constraint_cli.py list
+
+# チェックログ確認
+python utils/temporal_constraint_cli.py logs
+```
+
+### 10.4 AIエージェント統合ガイドライン
+
+**AIエージェント（Claude Code, Cursor等）への推奨事項:**
+
+1. **ファイル変更前には必ず制約チェックを実行**
+   ```python
+   # 推奨パターン
+   result = await constraint_checker.check_modification(request)
+   if not result.can_proceed:
+       # ユーザーに確認を求める
+       show_warning(result.warning_message)
+       if not user_confirmed:
+           return  # 変更を中止
+   ```
+
+2. **CLIラッパーの使用を推奨**
+   - 直接ファイルを書き込む代わりに `temporal_constraint_cli.py write` を使用
+   - 変更理由を必ず記録
+
+3. **検証済みファイルの識別**
+   - CRITICAL/HIGH 制約のファイルは慎重に扱う
+   - 可能な限り新規ファイルとして実装を検討
+
+### 10.5 将来の強制メカニズム（Phase 2以降）
+
+| フェーズ | 対応 | 強制力 |
+|---------|------|--------|
+| **現在** | 利用規約ベース + CLIラッパー | なし（自主的） |
+| **Phase 2** | Git Hooks / CI統合 | 中（コミット/マージ時） |
+| **Phase 3** | FileModificationService | 高（コードレベル） |
+
+```yaml
+# Phase 2: pre-commit フック例
+- repo: local
+  hooks:
+    - id: temporal-constraint-check
+      name: Temporal Constraint Check
+      entry: python utils/temporal_constraint_cli.py check --file
+      language: system
+      types: [python]
+```
+
+---
+
+## 11. 参考資料
 
 - [Sprint 11: Contradiction Detection仕様書](../contradiction/sprint11_contradiction_detection_spec.md)
 - [kiro_resonant_comparison_handoff.md](../../../../kiro_resonant_comparison_handoff.md)
@@ -1501,5 +1631,5 @@ temporal_constraint_blocks: Counter  # ブロック数
 
 **作成日**: 2025-12-29  
 **作成者**: Kana (Claude Opus 4.5)  
-**バージョン**: 1.0.0  
+**バージョン**: 1.1.0  
 **推定工数**: 5日間

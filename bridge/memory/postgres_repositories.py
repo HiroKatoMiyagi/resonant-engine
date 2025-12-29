@@ -287,7 +287,6 @@ class PostgresChoicePointRepository(ChoicePointRepository):
         async with self.session_factory() as db_session:
             result = await db_session.execute(
                 select(ChoicePointModel)
-                .options(selectinload(ChoicePointModel.session))
                 .where(ChoicePointModel.id == choice_point_id)
             )
             model = result.scalar_one_or_none()
@@ -317,7 +316,6 @@ class PostgresChoicePointRepository(ChoicePointRepository):
         async with self.session_factory() as db_session:
             result = await db_session.execute(
                 select(ChoicePointModel)
-                .options(selectinload(ChoicePointModel.session))
                 .where(ChoicePointModel.session_id == session_id)
                 .order_by(ChoicePointModel.created_at)
             )
@@ -328,7 +326,6 @@ class PostgresChoicePointRepository(ChoicePointRepository):
         async with self.session_factory() as db_session:
             result = await db_session.execute(
                 select(ChoicePointModel)
-                .options(selectinload(ChoicePointModel.session))
                 .where(ChoicePointModel.session_id == session_id)
                 .where(ChoicePointModel.selected_choice_id.is_(None))
                 .order_by(ChoicePointModel.created_at)
@@ -340,7 +337,6 @@ class PostgresChoicePointRepository(ChoicePointRepository):
         async with self.session_factory() as db_session:
             result = await db_session.execute(
                 select(ChoicePointModel)
-                .options(selectinload(ChoicePointModel.session))
                 .where(ChoicePointModel.intent_id == intent_id)
                 .order_by(ChoicePointModel.created_at)
             )
@@ -348,28 +344,17 @@ class PostgresChoicePointRepository(ChoicePointRepository):
             return [self._to_domain(m) for m in models]
 
     def _to_domain(self, model: ChoicePointModel) -> ChoicePoint:
+        """
+        Convert ChoicePointModel to domain ChoicePoint
+        
+        Note: ChoicePointModel has user_id, tags, context_type as direct columns (Sprint 10).
+              No need to fetch from metadata or session relationship.
+        """
         choices = [Choice(**c) for c in model.choices]
-        
-        # Handle missing columns in model by checking metadata or defaults
-        # If database.py is outdated, we might miss tags/context_type
-        tags = model.meta_info.get("tags", []) if model.meta_info else []
-        context_type = model.meta_info.get("context_type", "general") if model.meta_info else "general"
-        
-        # Try to get user_id from session if possible? 
-        # The domain model requires user_id. But ChoicePointModel doesn't have it.
-        # We might need to fetch session to get user_id, or store it in metadata.
-        # For now, let's use a placeholder or fetch it.
-        # Fetching it here is N+1 problem.
-        # Ideally ChoicePointModel should have user_id (denormalized) or we join.
-        # Let's assume we can get it from session relation if loaded, else placeholder.
-        
-        user_id = "unknown" # Placeholder
-        if model.session:
-            user_id = model.session.user_id
         
         return ChoicePoint(
             id=model.id,
-            user_id=user_id, # This is a problem. Domain model needs it.
+            user_id=model.user_id,  # ✅ 直接取得（N+1問題解消）
             session_id=model.session_id,
             intent_id=model.intent_id,
             question=model.question,
@@ -378,9 +363,9 @@ class PostgresChoicePointRepository(ChoicePointRepository):
             created_at=model.created_at,
             decided_at=model.decided_at,
             decision_rationale=model.decision_rationale,
-            metadata=model.meta_info,
-            tags=tags,
-            context_type=context_type
+            metadata=model.meta_info or {},  # ✅ Noneチェック
+            tags=model.tags or [],  # ✅ 直接取得
+            context_type=model.context_type or "general"  # ✅ 直接取得
         )
 
 

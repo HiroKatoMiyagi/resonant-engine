@@ -1,9 +1,10 @@
-"""Contradiction Detection API - 完全実装版"""
+"""Contradiction Detection API - 完全実装版（選択肢A: 根本解決）"""
 
 from fastapi import APIRouter, Query, Depends, HTTPException
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 from bridge.contradiction.detector import ContradictionDetector
 from app.dependencies import get_contradiction_detector
@@ -28,7 +29,7 @@ class ResolveContradictionRequest(BaseModel):
 
 
 class ContradictionResponse(BaseModel):
-    """矛盾レスポンス"""
+    """矛盾レスポンス（JSON互換型）"""
     id: str
     user_id: str
     new_intent_id: str
@@ -49,6 +50,39 @@ class ContradictionListResponse(BaseModel):
     """矛盾リストレスポンス"""
     contradictions: List[ContradictionResponse]
     count: int
+
+
+# ==================== Helper Functions ====================
+
+def serialize_contradiction(c) -> dict:
+    """
+    Contradictionモデルを辞書に変換（選択肢A: 根本解決アプローチ）
+    
+    Pydantic v2のmodel_dump(mode='json')が期待通りに動作しない場合の
+    明示的なシリアライズ実装。
+    
+    Note: 本来はmodel_dump(mode='json')だけで動作すべきだが、
+          環境によっては明示的な変換が必要。
+    """
+    data = c.model_dump()
+    
+    # UUID → str 変換
+    if isinstance(data.get('id'), UUID):
+        data['id'] = str(data['id'])
+    if isinstance(data.get('new_intent_id'), UUID):
+        data['new_intent_id'] = str(data['new_intent_id'])
+    if isinstance(data.get('conflicting_intent_id'), UUID):
+        data['conflicting_intent_id'] = str(data['conflicting_intent_id'])
+    
+    # datetime → ISO文字列 変換
+    if isinstance(data.get('detected_at'), datetime):
+        data['detected_at'] = data['detected_at'].isoformat()
+    if isinstance(data.get('resolved_at'), datetime):
+        data['resolved_at'] = data['resolved_at'].isoformat()
+    if isinstance(data.get('created_at'), datetime):
+        data.pop('created_at', None)  # APIレスポンスに不要
+    
+    return data
 
 
 # ==================== Endpoints ====================
@@ -73,7 +107,8 @@ async def get_pending_contradictions(
         
         return ContradictionListResponse(
             contradictions=[
-                ContradictionResponse(**c.dict()) for c in contradictions
+                ContradictionResponse(**serialize_contradiction(c)) 
+                for c in contradictions
             ],
             count=len(contradictions)
         )
@@ -105,7 +140,8 @@ async def check_intent_for_contradictions(
         
         return ContradictionListResponse(
             contradictions=[
-                ContradictionResponse(**c.dict()) for c in contradictions
+                ContradictionResponse(**serialize_contradiction(c)) 
+                for c in contradictions
             ],
             count=len(contradictions)
         )

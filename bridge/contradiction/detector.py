@@ -1,10 +1,12 @@
-"""Contradiction Detector Service - Sprint 11
+"""Contradiction Detector Service - Sprint 11 (スキーマ修正版)
 
 This service detects contradictions between new intents and past decisions:
 - Technology stack contradictions (e.g., PostgreSQL → SQLite)
 - Policy shifts (e.g., microservice → monolith within 2 weeks)
 - Duplicate work (similar intents with high Jaccard similarity)
 - Dogma (unverified assumptions like "always", "never")
+
+修正: intent_text → data->>'content' (intentsテーブルスキーマに合わせる)
 """
 
 import asyncpg
@@ -103,10 +105,10 @@ class ContradictionDetector:
 
         # 過去のIntentを取得（技術スタック関連）
         async with self.pool.acquire() as conn:
-            # Note: Assume 'intents' table exists from previous sprints
+            # ✅ 修正: intent_text → data->>'content'
             past_intents = await conn.fetch(
                 """
-                SELECT id, intent_text as content, created_at
+                SELECT id, data->>'content' as content, created_at
                 FROM intents
                 WHERE id != $1
                   AND (status IS NULL OR status != 'deprecated')
@@ -118,6 +120,10 @@ class ContradictionDetector:
 
         # 各過去Intentと比較
         for past_intent in past_intents:
+            # contentがNullの場合はスキップ
+            if not past_intent["content"]:
+                continue
+                
             past_tech_stack = self._extract_tech_stack(past_intent["content"])
 
             # カテゴリごとに矛盾チェック
@@ -150,6 +156,9 @@ class ContradictionDetector:
 
     def _extract_tech_stack(self, content: str) -> Dict[str, str]:
         """技術スタック抽出（単純なキーワードマッチ）"""
+        if not content:
+            return {}
+            
         content_lower = content.lower()
         tech_stack = {}
 
@@ -198,9 +207,10 @@ class ContradictionDetector:
             cutoff_date = datetime.now(timezone.utc) - timedelta(
                 days=self.POLICY_SHIFT_WINDOW_DAYS
             )
+            # ✅ 修正: intent_text → data->>'content'
             past_intents = await conn.fetch(
                 """
-                SELECT id, intent_text as content, created_at
+                SELECT id, data->>'content' as content, created_at
                 FROM intents
                 WHERE id != $1
                   AND created_at > $2
@@ -213,6 +223,10 @@ class ContradictionDetector:
 
         # 方針転換チェック
         for past_intent in past_intents:
+            # contentがNullの場合はスキップ
+            if not past_intent["content"]:
+                continue
+                
             past_content_lower = past_intent["content"].lower()
             if opposite_policy in past_content_lower:
                 # 方針転換検出！
@@ -246,9 +260,10 @@ class ContradictionDetector:
 
         # 過去の完了/進行中Intentを取得
         async with self.pool.acquire() as conn:
+            # ✅ 修正: intent_text → data->>'content'
             past_intents = await conn.fetch(
                 """
-                SELECT id, intent_text as content, created_at, status
+                SELECT id, data->>'content' as content, created_at, status
                 FROM intents
                 WHERE id != $1
                   AND (status = 'completed' OR status = 'in_progress')
@@ -262,6 +277,10 @@ class ContradictionDetector:
         new_tokens = set(new_intent_content.lower().split())
 
         for past_intent in past_intents:
+            # contentがNullの場合はスキップ
+            if not past_intent["content"]:
+                continue
+                
             past_tokens = set(past_intent["content"].lower().split())
             similarity = self._jaccard_similarity(new_tokens, past_tokens)
 

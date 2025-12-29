@@ -1,11 +1,10 @@
-"""Choice Preservation API"""
+"""Choice Preservation API - Pydantic v2準拠版（asyncpg自動変換対応）"""
 
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime, timezone
-import json
 
 from app.database import db
 
@@ -36,9 +35,51 @@ class DecideChoiceRequest(BaseModel):
     rejection_reasons: Dict[str, str] = Field(default_factory=dict)
 
 
+class ChoicePointResponse(BaseModel):
+    """Choice Point レスポンススキーマ"""
+    id: str
+    user_id: str
+    question: str
+    choices: List[Dict[str, Any]]
+    tags: List[str]
+    context_type: str
+    created_at: str
+    selected_choice_id: Optional[str] = None
+    decision_rationale: Optional[str] = None
+    decided_at: Optional[str] = None
+
+
+class ChoicePointListResponse(BaseModel):
+    """Choice Point リストレスポンス"""
+    choice_points: List[ChoicePointResponse]
+    count: int
+
+
+class ChoicePointSearchResponse(BaseModel):
+    """Choice Point 検索レスポンス"""
+    results: List[ChoicePointResponse]
+    count: int
+
+
+# ==================== Internal Models (DB層) ====================
+
+class ChoicePointDB(BaseModel):
+    """DB層のChoice Point（UUID/datetime型のまま）"""
+    id: UUID
+    user_id: str
+    question: str
+    choices: List[Dict[str, Any]]
+    tags: List[str]
+    context_type: str
+    created_at: datetime
+    selected_choice_id: Optional[str] = None
+    decision_rationale: Optional[str] = None
+    decided_at: Optional[datetime] = None
+
+
 # ==================== Endpoints ====================
 
-@router.get("/pending")
+@router.get("/pending", response_model=ChoicePointListResponse)
 async def get_pending_choice_points(
     user_id: str = Query(...)
 ):
@@ -46,127 +87,80 @@ async def get_pending_choice_points(
     try:
         rows = await db.fetch("""
             SELECT 
-                id::text,
-                user_id,
-                question,
-                choices,
-                tags,
-                context_type,
-                created_at
+                id, user_id, question, choices, tags, context_type,
+                created_at, selected_choice_id, decision_rationale, decided_at
             FROM choice_points
-            WHERE user_id = $1
-              AND selected_choice_id IS NULL
+            WHERE user_id = $1 AND selected_choice_id IS NULL
             ORDER BY created_at DESC
         """, user_id)
         
-        choice_points = [dict(row) for row in rows]
-        return {"choice_points": choice_points, "count": len(choice_points)}
+        # ✅ asyncpgが自動変換するのでそのまま使用
+        choice_points = [
+            ChoicePointResponse(**ChoicePointDB(**dict(row)).model_dump(mode='json'))
+            for row in rows
+        ]
+        
+        return ChoicePointListResponse(choice_points=choice_points, count=len(choice_points))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get pending choice points: {str(e)}")
 
 
-@router.post("/")
-async def create_choice_point(
-    request: CreateChoicePointRequest
-):
-    """新しい選択肢を作成"""
+@router.post("/", response_model=ChoicePointResponse)
+async def create_choice_point(request: CreateChoicePointRequest):
+    """新しいChoice Pointを作成"""
     try:
-        # session_idとintent_idはダミー値を使用（外部キー制約があるため）
-        # 実際の実装では、現在のセッションとIntentから取得する
+        # ✅ dict/listを直接渡す（asyncpgが自動的にJSONBに変換）
         row = await db.fetchrow("""
-            INSERT INTO choice_points (
-                id,
-                user_id,
-                session_id,
-                intent_id,
-                question,
-                choices,
-                tags,
-                context_type,
-                created_at
-            )
-            VALUES (
-                gen_random_uuid(),
-                $1,
-                (SELECT id FROM sessions LIMIT 1),
-                (SELECT id FROM intents LIMIT 1),
-                $2,
-                $3::jsonb,
-                $4,
-                $5,
-                NOW()
-            )
-            RETURNING id::text, user_id, question, choices, tags, context_type, created_at
-        """, 
-            request.user_id,
-            request.question,
-            json.dumps([c.dict() for c in request.choices]),
-            request.tags,
-            request.context_type
-        )
+            INSERT INTO choice_points (user_id, question, choices, tags, context_type)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, user_id, question, choices, selected_choice_id, 
+                      decision_rationale, tags, context_type, created_at, decided_at
+        """, request.user_id, request.question,
+            [c.model_dump() for c in request.choices],  # ✅ json.dumps()不要
+            request.tags, request.context_type)
         
-        choice_point = dict(row)
-        return {"choice_point": choice_point}
+        return ChoicePointResponse(**ChoicePointDB(**dict(row)).model_dump(mode='json'))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create choice point: {str(e)}")
 
 
-@router.put("/{choice_point_id}/decide")
-async def decide_choice(
-    choice_point_id: UUID,
-    request: DecideChoiceRequest
-):
+@router.put("/{choice_point_id}/decide", response_model=ChoicePointResponse)
+async def decide_choice(choice_point_id: UUID, request: DecideChoiceRequest):
     """選択を決定"""
     try:
-        # 既存のChoice Pointを取得
-        cp_row = await db.fetchrow("""
-            SELECT * FROM choice_points WHERE id = $1
-        """, choice_point_id)
-        
+        cp_row = await db.fetchrow("SELECT * FROM choice_points WHERE id = $1", choice_point_id)
         if not cp_row:
             raise HTTPException(status_code=404, detail=f"Choice Point not found: {choice_point_id}")
         
-        # choicesを更新（selected, rejection_reason追加）
+        # ✅ asyncpgが自動変換したchoicesをそのまま使用
         choices = cp_row['choices']
-        if isinstance(choices, str):
-            choices = json.loads(choices)
         
         updated_choices = []
         for choice in choices:
             choice_dict = dict(choice) if isinstance(choice, dict) else choice
             choice_dict['selected'] = (choice_dict['choice_id'] == request.selected_choice_id)
-            
-            if choice_dict['selected']:
-                choice_dict['rejection_reason'] = None
-            else:
-                choice_dict['rejection_reason'] = request.rejection_reasons.get(choice_dict['choice_id'], "")
-            
+            choice_dict['rejection_reason'] = None if choice_dict['selected'] else request.rejection_reasons.get(choice_dict['choice_id'], "")
             choice_dict['evaluated_at'] = datetime.now(timezone.utc).isoformat()
             updated_choices.append(choice_dict)
         
-        # DB更新
+        # ✅ dict/listを直接渡す（asyncpgが自動的にJSONBに変換）
         row = await db.fetchrow("""
             UPDATE choice_points
-            SET 
-                selected_choice_id = $1,
-                decision_rationale = $2,
-                choices = $3::jsonb,
-                decided_at = NOW()
+            SET selected_choice_id = $1, decision_rationale = $2, choices = $3, decided_at = NOW()
             WHERE id = $4
-            RETURNING id::text, user_id, question, choices, selected_choice_id, 
+            RETURNING id, user_id, question, choices, selected_choice_id, 
                       decision_rationale, tags, context_type, created_at, decided_at
         """, request.selected_choice_id, request.decision_rationale, 
-             json.dumps(updated_choices), choice_point_id)
+             updated_choices, choice_point_id)  # ✅ json.dumps()不要、::jsonb不要
         
-        choice_point = dict(row)
-        return {"choice_point": choice_point}
+        return ChoicePointResponse(**ChoicePointDB(**dict(row)).model_dump(mode='json'))
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to decide choice: {str(e)}")
 
 
-@router.get("/search")
+@router.get("/search", response_model=ChoicePointSearchResponse)
 async def search_choice_points(
     user_id: str = Query(...),
     tags: Optional[str] = Query(None),
@@ -181,14 +175,11 @@ async def search_choice_points(
         params = [user_id]
         param_idx = 2
         
-        # タグフィルタ
         if tags:
-            tag_list = tags.split(",")
             conditions.append(f"tags && ${param_idx}::text[]")
-            params.append(tag_list)
+            params.append(tags.split(","))
             param_idx += 1
         
-        # 時間範囲フィルタ
         if from_date:
             conditions.append(f"decided_at >= ${param_idx}")
             params.append(datetime.fromisoformat(from_date))
@@ -199,7 +190,6 @@ async def search_choice_points(
             params.append(datetime.fromisoformat(to_date))
             param_idx += 1
         
-        # フルテキスト検索
         if search_text:
             conditions.append(f"question ILIKE ${param_idx}")
             params.append(f"%{search_text}%")
@@ -208,25 +198,21 @@ async def search_choice_points(
         params.append(limit)
         
         query = f"""
-            SELECT 
-                id::text,
-                user_id,
-                question,
-                choices,
-                selected_choice_id,
-                decision_rationale,
-                tags,
-                context_type,
-                created_at,
-                decided_at
+            SELECT id, user_id, question, choices, selected_choice_id, decision_rationale,
+                   tags, context_type, created_at, decided_at
             FROM choice_points
             WHERE {' AND '.join(conditions)}
-            ORDER BY decided_at DESC
-            LIMIT ${param_idx}
+            ORDER BY decided_at DESC LIMIT ${param_idx}
         """
         
         rows = await db.fetch(query, *params)
-        results = [dict(row) for row in rows]
-        return {"results": results, "count": len(results)}
+        
+        # ✅ asyncpgが自動変換するのでそのまま使用
+        results = [
+            ChoicePointResponse(**ChoicePointDB(**dict(row)).model_dump(mode='json'))
+            for row in rows
+        ]
+        
+        return ChoicePointSearchResponse(results=results, count=len(results))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to search choice points: {str(e)}")

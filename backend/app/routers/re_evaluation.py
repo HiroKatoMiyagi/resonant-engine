@@ -1,4 +1,4 @@
-"""Re-evaluation API"""
+"""Re-evaluation API（修正版）"""
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -32,19 +32,32 @@ async def re_evaluate_intent(
     
     Returns:
         再評価結果
+    
+    Note: 現在はMockFeedbackBridgeを使用しているため、
+          実際の再評価は行われず、モックレスポンスを返します。
     """
     try:
-        result = await bridge_set.feedback.evaluate_intent(
-            intent_id=str(request.intent_id),
-            diff=request.diff,
-            source=request.source,
-            reason=request.reason
-        )
+        # Intentデータを構築
+        intent_data = {
+            "id": str(request.intent_id),
+            "type": "re_evaluation",
+            "source": request.source,
+            "reason": request.reason,
+            "diff": request.diff
+        }
+        
+        # ✅ 修正: evaluate_intent → request_reevaluation
+        result = await bridge_set.feedback.request_reevaluation(intent_data)
         
         return {
             "intent_id": str(request.intent_id),
             "status": "re-evaluated",
-            "result": result
+            "judgment": result.get("judgment", "approved"),
+            "evaluated_at": result.get("evaluated_at"),
+            "notes": result.get("notes"),
+            "diff": request.diff,
+            "source": request.source,
+            "reason": request.reason
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to re-evaluate intent: {str(e)}")

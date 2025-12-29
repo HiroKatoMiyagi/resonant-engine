@@ -1,0 +1,8 @@
+Metadata-Version: 2.4
+Name: resonant-memory-lifecycle
+Version: 2.0.0
+Requires-Python: >=3.11
+Requires-Dist: asyncpg>=0.30.0
+Requires-Dist: pydantic>=2.7.0
+Dynamic: requires-dist
+Dynamic: requires-python

@@ -6,13 +6,13 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from bridge.semantic_bridge.models import (
+from app.services.semantic.models import (
     EmotionState,
     MemorySearchQuery,
     MemoryType,
     MemoryUnit,
 )
-from bridge.semantic_bridge.repositories import InMemoryUnitRepository
+from app.services.semantic.repositories import InMemoryUnitRepository
 
 
 class TestMemorySearchRepository:

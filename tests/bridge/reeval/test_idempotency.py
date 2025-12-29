@@ -1,6 +1,6 @@
 from uuid import UUID, uuid4
 
-from bridge.core.correction.idempotency import generate_correction_id, is_correction_applied
+from app.services.intent.correction.idempotency import generate_correction_id, is_correction_applied
 
 
 def test_generate_correction_id_is_deterministic() -> None:

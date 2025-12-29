@@ -7,7 +7,7 @@ from datetime import datetime
 
 from context_assembler.service import ContextAssemblerService
 from context_assembler.models import ContextConfig
-from bridge.providers.ai.kana_ai_bridge import KanaAIBridge
+from app.integrations import KanaAIBridge
 from memory_store.models import MemoryResult, MemoryType
 from backend.app.models.message import MessageResponse, MessageType
 

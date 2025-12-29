@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from bridge.realtime.event_distributor import Event, EventChannel, EventDistributor
+from app.services.realtime.event_distributor import Event, EventChannel, EventDistributor
 
 
 @pytest.mark.asyncio

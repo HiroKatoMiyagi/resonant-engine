@@ -5,15 +5,15 @@ from contextlib import asynccontextmanager
 import pytest
 import pytest_asyncio
 
-from bridge.core.bridge_set import BridgeSet
-from bridge.core.constants import TechnicalActor
-from bridge.core.errors import DeadlockError
-from bridge.core.models.intent_model import IntentModel
-from bridge.core.retry import retry_on_deadlock
-from bridge.providers.ai import MockAIBridge
-from bridge.providers.audit import MockAuditLogger
-from bridge.providers.data import MockDataBridge
-from bridge.providers.feedback import MockFeedbackBridge
+from app.services.intent.bridge_set import BridgeSet
+from app.services.shared.constants import TechnicalActor
+from app.services.shared.errors import DeadlockError
+from app.models.intent import IntentModel
+from app.services.intent.retry import retry_on_deadlock
+from app.integrations import MockAIBridge
+from app.integrations import MockAuditLogger
+from app.integrations import MockDataBridge
+from app.integrations import MockFeedbackBridge
 
 
 class FlakyLockDataBridge(MockDataBridge):

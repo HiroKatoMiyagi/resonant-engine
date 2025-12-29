@@ -6,12 +6,12 @@ from collections.abc import AsyncIterator
 import pytest
 import pytest_asyncio
 
-from bridge.api.reeval import reeval_intent
-from bridge.core.constants import IntentStatusEnum, PhilosophicalActor, TechnicalActor
-from bridge.core.models.intent_model import IntentModel
-from bridge.core.models.reeval import ReEvaluationRequest
-from bridge.providers.audit import MockAuditLogger
-from bridge.providers.data import MockDataBridge
+from app.services.intent.reeval import reeval_intent
+from app.services.shared.constants import IntentStatusEnum, PhilosophicalActor, TechnicalActor
+from app.models.intent import IntentModel
+from app.models.reeval import ReEvaluationRequest
+from app.integrations import MockAuditLogger
+from app.integrations import MockDataBridge
 
 
 @pytest_asyncio.fixture

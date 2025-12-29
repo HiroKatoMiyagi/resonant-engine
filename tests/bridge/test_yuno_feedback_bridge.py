@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bridge.providers.feedback.yuno_feedback_bridge import YunoFeedbackBridge
+from app.integrations import YunoFeedbackBridge
 
 
 class FakeChatCompletions:

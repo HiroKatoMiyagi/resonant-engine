@@ -6,9 +6,9 @@ import pytest
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from bridge.semantic_bridge.service import SemanticBridgeService
-from bridge.semantic_bridge.models import EventContext, MemoryType
-from bridge.semantic_bridge.repositories import InMemoryUnitRepository
+from app.services.semantic.service import SemanticBridgeService
+from app.services.semantic.models import EventContext, MemoryType
+from app.services.semantic.repositories import InMemoryUnitRepository
 
 
 class TestSemanticBridgeService:

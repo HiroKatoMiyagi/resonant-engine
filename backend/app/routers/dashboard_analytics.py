@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Query, HTTPException, Depends
 from datetime import datetime, timedelta
 
-from bridge.dashboard import DashboardService
+from app.services.dashboard.service import DashboardService
 from app.dependencies import get_dashboard_service
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard-analytics"])

@@ -3,8 +3,8 @@ from collections.abc import AsyncIterator
 import pytest
 import pytest_asyncio
 
-from bridge.providers.audit import MockAuditLogger
-from bridge.providers.data import MockDataBridge
+from app.integrations import MockAuditLogger
+from app.integrations import MockDataBridge
 
 
 @pytest_asyncio.fixture

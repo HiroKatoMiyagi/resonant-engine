@@ -5,10 +5,10 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 
-from bridge.core.constants import IntentStatusEnum, TechnicalActor
-from bridge.core.exceptions import InvalidStatusError
-from bridge.core.models.intent_model import IntentModel
-from bridge.providers.data import MockDataBridge
+from app.services.shared.constants import IntentStatusEnum, TechnicalActor
+from app.services.shared.exceptions import InvalidStatusError
+from app.models.intent import IntentModel
+from app.integrations import MockDataBridge
 
 
 @pytest_asyncio.fixture

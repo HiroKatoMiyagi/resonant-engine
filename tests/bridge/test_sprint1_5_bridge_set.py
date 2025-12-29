@@ -1,13 +1,13 @@
 import pytest
 
-from bridge.core.constants import IntentStatusEnum, TechnicalActor
-from bridge.core.models.intent_model import IntentModel
-from bridge.core.reeval_client import ReEvalClient
-from bridge.core.bridge_set import BridgeSet
-from bridge.providers.ai import MockAIBridge
-from bridge.providers.audit import MockAuditLogger
-from bridge.providers.data import MockDataBridge
-from bridge.providers.feedback import MockFeedbackBridge
+from app.services.shared.constants import IntentStatusEnum, TechnicalActor
+from app.models.intent import IntentModel
+from app.services.intent.reeval import ReEvalClient
+from app.services.intent.bridge_set import BridgeSet
+from app.integrations import MockAIBridge
+from app.integrations import MockAuditLogger
+from app.integrations import MockDataBridge
+from app.integrations import MockFeedbackBridge
 
 
 @pytest.mark.asyncio

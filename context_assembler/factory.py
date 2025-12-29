@@ -71,7 +71,7 @@ async def create_context_assembler(
     try:
         from backend.app.repositories.message_repo import MessageRepository
         from memory_store.repository import MemoryRepository
-        from bridge.memory.repositories import SessionRepository
+        from app.services.memory.repositories import SessionRepository
     except ImportError as e:
         raise ImportError(
             "Required repositories not found. "

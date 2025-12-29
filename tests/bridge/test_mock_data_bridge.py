@@ -1,9 +1,9 @@
 import pytest
 
-from bridge.core.constants import IntentStatusEnum, TechnicalActor
-from bridge.core.models.intent_model import IntentModel
-from bridge.providers.data import MockDataBridge
-from bridge.providers.feedback import MockFeedbackBridge
+from app.services.shared.constants import IntentStatusEnum, TechnicalActor
+from app.models.intent import IntentModel
+from app.integrations import MockDataBridge
+from app.integrations import MockFeedbackBridge
 
 
 @pytest.mark.asyncio

@@ -19,13 +19,13 @@ class IntentProcessor:
 
     async def initialize(self):
         """非同期初期化: KanaAIBridge、Claude Code Client、Classifierを生成"""
-        from bridge.factory.bridge_factory import BridgeFactory
+        from app.dependencies import create_ai_bridge_with_memory
         from .claude_code_client import ClaudeCodeClient
         from .classifier import IntentClassifier
 
         try:
             # KanaAIBridge（Context Assembler統合）初期化
-            self.ai_bridge = await BridgeFactory.create_ai_bridge_with_memory(
+            self.ai_bridge = await create_ai_bridge_with_memory(
                 bridge_type="kana",
                 pool=self.pool,
             )
@@ -70,11 +70,9 @@ class IntentProcessor:
     async def _initialize_contradiction_detector(self):
         """Sprint 11: ContradictionDetectorを初期化"""
         try:
-            from bridge.factory.bridge_factory import BridgeFactory
+            from app.services.contradiction.detector import ContradictionDetector
 
-            self.contradiction_detector = BridgeFactory.create_contradiction_detector(
-                pool=self.pool
-            )
+            self.contradiction_detector = ContradictionDetector(pool=self.pool)
             logger.info("✅ ContradictionDetector initialized")
         except Exception as e:
             logger.warning(f"⚠️ ContradictionDetector initialization failed: {e}")

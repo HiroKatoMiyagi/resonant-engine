@@ -1,7 +1,7 @@
 import pytest
 
-from bridge.core.constants import BridgeTypeEnum, LogSeverity
-from bridge.providers.audit import MockAuditLogger
+from app.services.shared.constants import BridgeTypeEnum, LogSeverity
+from app.integrations import MockAuditLogger
 
 
 @pytest.mark.asyncio

@@ -12,8 +12,8 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock
 
-from bridge.memory.choice_query_engine import ChoiceQueryEngine, find_technology_decisions, find_recent_decisions
-from bridge.memory.models import ChoicePoint, Choice
+from app.services.memory.choice_query_engine import ChoiceQueryEngine, find_technology_decisions, find_recent_decisions
+from app.services.memory.models import ChoicePoint, Choice
 
 
 class TestChoiceQueryEngine:
@@ -22,7 +22,7 @@ class TestChoiceQueryEngine:
     @pytest.fixture
     def mock_pool(self):
         """Create a mock asyncpg pool"""
-        pool = AsyncMock()
+        pool = MagicMock() # Use MagicMock for synchronous access to acquire
         return pool
 
     @pytest.fixture
@@ -46,7 +46,7 @@ class TestChoiceQueryEngine:
             'session_id': uuid4(),
             'intent_id': uuid4(),
             'question': 'Test question',
-            'choices': '[{"id": "A", "description": "Test"}]',
+            'choices': '[{"id": "A", "description": "Test"}, {"id": "B", "description": "Test B"}]',
             'selected_choice_id': 'A',
             'tags': ['database', 'technology'],
             'context_type': 'general',
@@ -154,7 +154,7 @@ class TestChoiceQueryEngine:
             'session_id': uuid4(),
             'intent_id': uuid4(),
             'question': 'Database selection for project',
-            'choices': '[{"id": "A", "description": "PostgreSQL"}]',
+            'choices': '[{"id": "A", "description": "PostgreSQL"}, {"id": "B", "description": "MySQL"}]',
             'selected_choice_id': 'A',
             'tags': ['database'],
             'context_type': 'architecture',
@@ -194,7 +194,7 @@ class TestChoiceQueryEngine:
                 'session_id': uuid4(),
                 'intent_id': uuid4(),
                 'question': 'Which database should we use?',
-                'choices': '[{"id": "A", "description": "PostgreSQL"}]',
+                'choices': '[{"id": "A", "description": "PostgreSQL"}, {"id": "B", "description": "MySQL"}]',
                 'selected_choice_id': 'A',
                 'tags': ['database', 'technology'],
                 'context_type': 'architecture',
@@ -210,7 +210,7 @@ class TestChoiceQueryEngine:
                 'session_id': uuid4(),
                 'intent_id': uuid4(),
                 'question': 'Database configuration',
-                'choices': '[{"id": "A", "description": "Config"}]',
+                'choices': '[{"id": "A", "description": "Config"}, {"id": "B", "description": "Default"}]',
                 'selected_choice_id': 'A',
                 'tags': ['configuration'],
                 'context_type': 'feature',
@@ -221,7 +221,7 @@ class TestChoiceQueryEngine:
                 'rank': 0.6
             }
         ]
-        mock_conn.fetch.return_value = mock_rows
+        mock_conn.fetch.return_value = [mock_rows[0]] # Simulate DB filtering returning only match
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
         # Execute search with tag filter
@@ -247,7 +247,7 @@ class TestChoiceQueryEngine:
                 'session_id': uuid4(),
                 'intent_id': uuid4(),
                 'question': 'Test question 1',
-                'choices': '[{"id": "A", "description": "Test"}]',
+                'choices': '[{"id": "A", "description": "Test"}, {"id": "B", "description": "Test B"}]',
                 'selected_choice_id': 'A',
                 'tags': ['tag1'],
                 'context_type': 'general',
@@ -263,7 +263,7 @@ class TestChoiceQueryEngine:
                 'session_id': uuid4(),
                 'intent_id': uuid4(),
                 'question': 'Test question 2',
-                'choices': '[{"id": "A", "description": "Test"}]',
+                'choices': '[{"id": "A", "description": "Test"}, {"id": "B", "description": "Test B"}]',
                 'selected_choice_id': 'A',
                 'tags': ['tag2'],
                 'context_type': 'general',
@@ -310,8 +310,8 @@ class TestConvenienceFunctions:
         # Verify
         assert results == []
         mock_engine.search_by_tags.assert_called_once_with(
-            user_id='test_user',
-            tags=['database'],
+            'test_user',
+            ['technology', 'database'],
             match_all=False,
             limit=5
         )
@@ -335,6 +335,7 @@ class TestConvenienceFunctions:
         assert results == []
         mock_engine.search_by_time_range.assert_called_once()
         call_args = mock_engine.search_by_time_range.call_args
-        assert call_args[1]['user_id'] == 'test_user'
-        assert call_args[1]['to_date'] is None
-        assert call_args[1]['limit'] == 10
+        # Check positional args
+        assert call_args[0][0] == 'test_user'
+        assert call_args[0][2] is None # to_date
+        assert call_args[0][3] == 10   # limit

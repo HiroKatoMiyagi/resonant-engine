@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 from pydantic import ValidationError
 
-from bridge.contradiction.models import Contradiction, IntentRelation
+from app.services.contradiction.models import Contradiction, IntentRelation
 
 
 class TestContradictionModel:

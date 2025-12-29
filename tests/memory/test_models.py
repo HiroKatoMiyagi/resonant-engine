@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from uuid import uuid4, UUID
 from pydantic import ValidationError
 
-from bridge.memory.models import (
+from app.services.memory.models import (
     Session,
     SessionStatus,
     Intent,
@@ -267,6 +267,7 @@ class TestChoicePointModel:
         """ChoicePoint creation with pending state"""
         cp = ChoicePoint(
             session_id=uuid4(),
+            user_id="test_user",
             intent_id=uuid4(),
             question="PostgreSQL vs SQLite?",
             choices=[
@@ -285,6 +286,7 @@ class TestChoicePointModel:
         """ChoicePoint with decision made"""
         cp = ChoicePoint(
             session_id=uuid4(),
+            user_id="test_user",
             intent_id=uuid4(),
             question="Test question?",
             choices=[
@@ -304,6 +306,7 @@ class TestChoicePointModel:
         with pytest.raises(ValidationError):
             ChoicePoint(
                 session_id=uuid4(),
+                user_id="test_user",
                 intent_id=uuid4(),
                 question="Only one choice?",
                 choices=[Choice(id="only", description="Only option", implications={})],
@@ -314,6 +317,7 @@ class TestChoicePointModel:
         with pytest.raises(ValidationError):
             ChoicePoint(
                 session_id=uuid4(),
+                user_id="test_user",
                 intent_id=uuid4(),
                 question="Duplicate IDs?",
                 choices=[

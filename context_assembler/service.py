@@ -8,7 +8,7 @@ from uuid import UUID
 from memory_store.models import MemoryResult
 from backend.app.models.message import MessageResponse
 from backend.app.repositories.message_repo import MessageRepository
-from bridge.memory.repositories import SessionRepository
+from app.services.memory.repositories import SessionRepository
 from retrieval.orchestrator import RetrievalOrchestrator, RetrievalOptions
 
 from .models import (
@@ -35,7 +35,7 @@ except ImportError:
 
 # Sprint 10: Choice Preservation support
 try:
-    from bridge.memory.choice_query_engine import ChoiceQueryEngine
+    from app.services.memory.choice_engine import ChoiceQueryEngine
     HAS_CHOICE_QUERY = True
 except ImportError:
     HAS_CHOICE_QUERY = False

@@ -12,8 +12,8 @@ from datetime import datetime, timezone
 from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from bridge.contradiction.detector import ContradictionDetector
-from bridge.contradiction.models import Contradiction
+from app.services.contradiction.detector import ContradictionDetector
+from app.services.contradiction.models import Contradiction
 
 
 @pytest.mark.asyncio

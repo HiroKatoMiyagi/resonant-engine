@@ -6,8 +6,8 @@ import pytest
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from bridge.semantic_bridge.inferencer import TypeProjectInferencer
-from bridge.semantic_bridge.models import (
+from app.services.semantic.inferencer import TypeProjectInferencer
+from app.services.semantic.models import (
     EmotionState,
     EventContext,
     MemoryType,

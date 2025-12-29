@@ -16,6 +16,7 @@ anthropic>=0.18.0
 
 # Bridge Lite Data/Audit
 asyncpg>=0.29.0
+sqlalchemy>=2.0.0
 openai>=1.40.0
 pydantic>=2.7.0
 

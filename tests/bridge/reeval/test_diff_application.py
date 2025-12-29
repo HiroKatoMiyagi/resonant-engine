@@ -1,7 +1,7 @@
 import pytest
 
-from bridge.core.correction.diff import apply_diff
-from bridge.core.exceptions import DiffValidationError
+from app.services.intent.correction.diff import apply_diff
+from app.services.shared.exceptions import DiffValidationError
 
 
 def test_diff_apply_simple_field_replacement() -> None:

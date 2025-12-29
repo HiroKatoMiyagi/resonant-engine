@@ -10,8 +10,8 @@ import httpx
 import pytest
 
 from bridge.api.app import app
-from bridge.realtime import EventChannel, get_event_distributor, shutdown_event_distributor
-from bridge.realtime.websocket_manager import websocket_manager
+from app.services.realtime import EventChannel, get_event_distributor, shutdown_event_distributor
+from app.services.realtime.websocket_manager import websocket_manager
 
 CLIENT_COUNT = 25
 LATENCY_CLIENTS = 15

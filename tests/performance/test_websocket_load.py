@@ -9,8 +9,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from bridge.api.app import app
-from bridge.realtime import Event, EventChannel, shutdown_event_distributor
-from bridge.realtime.websocket_manager import websocket_manager
+from app.services.realtime import Event, EventChannel, shutdown_event_distributor
+from app.services.realtime.websocket_manager import websocket_manager
 
 LOAD_CONNECTIONS = 100
 LATENCY_CONNECTIONS = 50

@@ -8,7 +8,7 @@ import pytest
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from bridge.memory.models import (
+from app.services.memory.models import (
     AgentType,
     BreathingPhase,
     Choice,
@@ -18,8 +18,8 @@ from bridge.memory.models import (
     SessionStatus,
     SnapshotType,
 )
-from bridge.memory.service import MemoryManagementService
-from bridge.memory.in_memory_repositories import (
+from app.services.memory.service import MemoryManagementService
+from app.services.memory.in_memory_repositories import (
     InMemorySessionRepository,
     InMemoryIntentRepository,
     InMemoryResonanceRepository,

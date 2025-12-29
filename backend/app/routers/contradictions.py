@@ -6,7 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 from datetime import datetime
 
-from bridge.contradiction.detector import ContradictionDetector
+from app.services.contradiction.detector import ContradictionDetector
 from app.dependencies import get_contradiction_detector
 
 router = APIRouter(prefix="/api/v1/contradiction", tags=["contradiction"])

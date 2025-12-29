@@ -1,10 +1,10 @@
 import pytest
 
-from bridge.factory.bridge_factory import BridgeFactory
-from bridge.core.constants import TechnicalActor
-from bridge.core.models.intent_model import IntentModel
-from bridge.core.reeval_client import ReEvalClient
-from bridge.providers.feedback.mock_feedback_bridge import MockFeedbackBridge
+from app.dependencies import create_bridge_set, create_data_bridge, create_ai_bridge, create_feedback_bridge
+from app.services.shared.constants import TechnicalActor
+from app.models.intent import IntentModel
+from app.services.intent.reeval import ReEvalClient
+from app.integrations import MockFeedbackBridge
 
 
 @pytest.mark.asyncio

@@ -6,7 +6,7 @@ import pytest
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from bridge.semantic_bridge.models import (
+from app.services.semantic.models import (
     MemoryType,
     EmotionState,
     MemoryUnit,

@@ -24,10 +24,10 @@ from typing import Any, Dict
 import pytest
 import pytest_asyncio
 
-from bridge.core.constants import BridgeTypeEnum, TechnicalActor
-from bridge.core.constants import IntentStatusEnum
-from bridge.core.models.intent_model import IntentModel
-from bridge.factory.bridge_factory import BridgeFactory
+from app.services.shared.constants import BridgeTypeEnum, TechnicalActor
+from app.services.shared.constants import IntentStatusEnum
+from app.models.intent import IntentModel
+from app.dependencies import create_bridge_set
 
 
 @pytest_asyncio.fixture(scope="module")
@@ -41,7 +41,7 @@ async def bridges():
     os.environ.setdefault("FEEDBACK_BRIDGE_TYPE", "mock")
     os.environ.setdefault("AUDIT_LOGGER_TYPE", "mock")
 
-    bridge_set = BridgeFactory.create_all()
+    bridge_set = create_bridge_set()
     async with bridge_set as bundle:
         try:
             yield bundle

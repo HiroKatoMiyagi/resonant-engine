@@ -10,8 +10,8 @@ Memory Management System 手動統合テストスクリプト
 """
 
 import asyncio
-from bridge.memory.service import MemoryManagementService
-from bridge.memory.in_memory_repositories import (
+from app.services.memory.service import MemoryManagementService
+from app.services.memory.in_memory_repositories import (
     InMemorySessionRepository,
     InMemoryIntentRepository,
     InMemoryResonanceRepository,
@@ -20,7 +20,7 @@ from bridge.memory.in_memory_repositories import (
     InMemoryBreathingCycleRepository,
     InMemorySnapshotRepository,
 )
-from bridge.memory.models import (
+from app.services.memory.models import (
     AgentType,
     BreathingPhase,
     Choice,

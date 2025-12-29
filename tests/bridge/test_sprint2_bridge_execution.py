@@ -6,14 +6,14 @@ from typing import Any, Dict, Tuple, Type
 import pytest
 import pytest_asyncio
 
-from bridge.core.bridge_set import BridgeSet
-from bridge.core.constants import AuditEventType, BridgeTypeEnum, ExecutionMode, IntentStatusEnum, TechnicalActor
-from bridge.core.models.intent_model import IntentModel
-from bridge.core.reeval_client import ReEvalClient
-from bridge.providers.ai import MockAIBridge
-from bridge.providers.audit import MockAuditLogger
-from bridge.providers.data import MockDataBridge
-from bridge.providers.feedback import MockFeedbackBridge
+from app.services.intent.bridge_set import BridgeSet
+from app.services.shared.constants import AuditEventType, BridgeTypeEnum, ExecutionMode, IntentStatusEnum, TechnicalActor
+from app.models.intent import IntentModel
+from app.services.intent.reeval import ReEvalClient
+from app.integrations import MockAIBridge
+from app.integrations import MockAuditLogger
+from app.integrations import MockDataBridge
+from app.integrations import MockFeedbackBridge
 
 
 @pytest_asyncio.fixture

@@ -13,12 +13,12 @@ import asyncio
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from bridge.semantic_bridge.extractor import SemanticExtractor
-from bridge.semantic_bridge.inferencer import TypeProjectInferencer
-from bridge.semantic_bridge.constructor import MemoryUnitConstructor
-from bridge.semantic_bridge.service import SemanticBridgeService
-from bridge.semantic_bridge.repositories import InMemoryUnitRepository
-from bridge.semantic_bridge.models import (
+from app.services.semantic.extractor import SemanticExtractor
+from app.services.semantic.inferencer import TypeProjectInferencer
+from app.services.semantic.constructor import MemoryUnitConstructor
+from app.services.semantic.service import SemanticBridgeService
+from app.services.semantic.repositories import InMemoryUnitRepository
+from app.services.semantic.models import (
     EventContext,
     MemoryType,
     EmotionState,

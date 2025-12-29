@@ -1,8 +1,8 @@
 import pytest
 
-from bridge.core.constants import IntentStatusEnum, PhilosophicalActor, TechnicalActor
-from bridge.core.models.intent_model import IntentModel
-from bridge.core.exceptions import DiffValidationError, InvalidStatusError
+from app.services.shared.constants import IntentStatusEnum, PhilosophicalActor, TechnicalActor
+from app.models.intent import IntentModel
+from app.services.shared.exceptions import DiffValidationError, InvalidStatusError
 
 
 def _build_intent() -> IntentModel:

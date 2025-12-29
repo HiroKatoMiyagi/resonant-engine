@@ -13,8 +13,8 @@ import pytest
 import os
 from typing import Dict, Any
 
-from bridge.providers.ai.kana_ai_bridge import KanaAIBridge
-from bridge.providers.ai.mock_ai_bridge import MockAIBridge
+from app.integrations import KanaAIBridge
+from app.integrations import MockAIBridge
 
 
 @pytest.mark.asyncio

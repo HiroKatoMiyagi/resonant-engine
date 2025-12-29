@@ -1,4 +1,4 @@
-from bridge.realtime.triggers import (
+from app.services.realtime.triggers import (
     AUDIT_LOG_CREATED_FUNCTION,
     AUDIT_LOG_CREATED_TRIGGER,
     INTENT_CHANGED_FUNCTION,

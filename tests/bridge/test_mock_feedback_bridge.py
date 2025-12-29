@@ -2,10 +2,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from bridge.core.constants import IntentStatusEnum
-from bridge.core.models.intent_model import IntentModel
-from bridge.core.models.reeval import ReEvaluationRequest
-from bridge.providers.feedback.mock_feedback_bridge import MockFeedbackBridge
+from app.services.shared.constants import IntentStatusEnum
+from app.models.intent import IntentModel
+from app.models.reeval import ReEvaluationRequest
+from app.integrations import MockFeedbackBridge
 
 
 class FakeReEvalClient:

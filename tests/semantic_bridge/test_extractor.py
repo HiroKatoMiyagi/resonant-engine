@@ -6,8 +6,8 @@ import pytest
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from bridge.semantic_bridge.extractor import SemanticExtractor
-from bridge.semantic_bridge.models import EmotionState, EventContext
+from app.services.semantic.extractor import SemanticExtractor
+from app.services.semantic.models import EmotionState, EventContext
 
 
 class TestSemanticExtractor:

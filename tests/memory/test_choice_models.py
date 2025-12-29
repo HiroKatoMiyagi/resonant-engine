@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from uuid import uuid4, UUID
 from pydantic import ValidationError
 
-from bridge.memory.models import Choice, ChoicePoint
+from app.services.memory.models import Choice, ChoicePoint
 
 
 class TestChoiceModelEnhanced:

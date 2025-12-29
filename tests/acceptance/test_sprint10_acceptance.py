@@ -20,13 +20,13 @@ import asyncpg
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-from bridge.memory.models import (
+from app.services.memory.models import (
     Choice, ChoicePoint, Session, Intent, SessionStatus, IntentStatus
 )
-from bridge.memory.database import Base
-from bridge.memory.service import MemoryManagementService
-from bridge.memory.choice_query_engine import ChoiceQueryEngine
-from bridge.memory.postgres_repositories import (
+from app.services.memory.database import Base
+from app.services.memory.service import MemoryManagementService
+from app.services.memory.choice_query_engine import ChoiceQueryEngine
+from app.services.memory.postgres_repositories import (
     PostgresSessionRepository,
     PostgresIntentRepository,
     PostgresResonanceRepository,
@@ -223,7 +223,7 @@ class TestSprint10Acceptance:
         TC-15: Tag Naming Convention Compliance
         Requirement: Tags should be snake_case (recommended)
         """
-        from bridge.memory.models import ChoicePoint, Choice
+        from app.services.memory.models import ChoicePoint, Choice
         
         cp = ChoicePoint(
             user_id="user",

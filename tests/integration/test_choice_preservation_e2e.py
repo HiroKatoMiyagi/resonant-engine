@@ -13,9 +13,9 @@ from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock
 
-from bridge.memory.models import Choice, ChoicePoint
-from bridge.memory.service import MemoryManagementService
-from bridge.memory.choice_query_engine import ChoiceQueryEngine
+from app.services.memory.models import Choice, ChoicePoint
+from app.services.memory.service import MemoryManagementService
+from app.services.memory.choice_query_engine import ChoiceQueryEngine
 from context_assembler.service import ContextAssemblerService
 from context_assembler.models import ContextConfig, AssemblyOptions
 

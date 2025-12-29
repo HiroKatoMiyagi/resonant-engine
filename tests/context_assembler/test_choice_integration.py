@@ -16,7 +16,7 @@ from context_assembler.models import (
     AssemblyOptions,
     ContextConfig,
 )
-from bridge.memory.models import Choice, ChoicePoint
+from app.services.memory.models import Choice, ChoicePoint
 
 
 class TestContextAssemblerChoiceIntegration:

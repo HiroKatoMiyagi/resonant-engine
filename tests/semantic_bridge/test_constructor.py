@@ -6,8 +6,8 @@ import pytest
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from bridge.semantic_bridge.constructor import MemoryUnitConstructor
-from bridge.semantic_bridge.models import (
+from app.services.semantic.constructor import MemoryUnitConstructor
+from app.services.semantic.models import (
     EmotionState,
     InferenceResult,
     MemoryType,
@@ -71,7 +71,7 @@ class TestMemoryUnitConstructor:
 
     def test_validate_success(self, constructor):
         """Test validation passes for valid unit"""
-        from bridge.semantic_bridge.models import MemoryUnit
+        from app.services.semantic.models import MemoryUnit
 
         unit = MemoryUnit(
             type=MemoryType.SESSION_SUMMARY,
@@ -84,7 +84,7 @@ class TestMemoryUnitConstructor:
 
     def test_validate_title_required(self, constructor):
         """Test validation fails for empty title"""
-        from bridge.semantic_bridge.models import MemoryUnit
+        from app.services.semantic.models import MemoryUnit
 
         # Pydantic already validates min_length at creation time
         with pytest.raises(ValueError):
@@ -96,7 +96,7 @@ class TestMemoryUnitConstructor:
 
     def test_validate_title_too_long(self, constructor):
         """Test validation fails for title > 200 chars"""
-        from bridge.semantic_bridge.models import MemoryUnit
+        from app.services.semantic.models import MemoryUnit
 
         # Pydantic already validates max_length at creation time
         with pytest.raises(ValueError):
@@ -108,7 +108,7 @@ class TestMemoryUnitConstructor:
 
     def test_validate_content_required(self, constructor):
         """Test validation fails for empty content"""
-        from bridge.semantic_bridge.models import MemoryUnit
+        from app.services.semantic.models import MemoryUnit
 
         # Pydantic already validates min_length at creation time
         with pytest.raises(ValueError):
@@ -120,7 +120,7 @@ class TestMemoryUnitConstructor:
 
     def test_validate_ci_level_range(self, constructor):
         """Test CI level range validation"""
-        from bridge.semantic_bridge.models import MemoryUnit
+        from app.services.semantic.models import MemoryUnit
 
         # Valid
         unit = MemoryUnit(
@@ -133,7 +133,7 @@ class TestMemoryUnitConstructor:
 
     def test_validate_too_many_tags(self, constructor):
         """Test validation fails for too many tags"""
-        from bridge.semantic_bridge.models import MemoryUnit
+        from app.services.semantic.models import MemoryUnit
 
         unit = MemoryUnit(
             type=MemoryType.SESSION_SUMMARY,

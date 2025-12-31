@@ -188,6 +188,7 @@ async def get_bridge_set() -> BridgeSet:
 
 from app.services.term_drift.detector import TermDriftDetector
 from app.services.temporal_constraint.checker import TemporalConstraintChecker
+from app.services.file_modification.service import FileModificationService
 
 @lru_cache
 def get_term_drift_detector() -> TermDriftDetector:
@@ -202,3 +203,13 @@ def get_term_drift_detector() -> TermDriftDetector:
 def get_temporal_constraint_checker() -> TemporalConstraintChecker:
     """Temporal Constraint Checker取得"""
     return TemporalConstraintChecker(db.pool)
+
+
+@lru_cache
+def get_file_modification_service() -> FileModificationService:
+    """File Modification Service取得（シングルトン）"""
+    constraint_checker = get_temporal_constraint_checker()
+    return FileModificationService(
+        pool=db.pool,
+        constraint_checker=constraint_checker
+    )

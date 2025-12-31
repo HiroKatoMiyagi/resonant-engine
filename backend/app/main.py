@@ -104,6 +104,11 @@ app.include_router(term_drift.router)
 app.include_router(temporal_constraint.router)
 logger.info("✅ Term Drift & Temporal Constraint routers registered")
 
+# 🆕 Phase 3: FileModificationService Router
+from app.routers import file_modification
+app.include_router(file_modification.router)
+logger.info("✅ FileModificationService router registered")
+
 # WebSocket router (Sprint 15)
 from app.routers import websocket
 app.include_router(websocket.router)

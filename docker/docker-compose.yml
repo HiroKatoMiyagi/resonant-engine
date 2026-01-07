@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   postgres:
     image: ankane/pgvector:latest
@@ -16,7 +14,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-resonant} -d ${POSTGRES_DB:-resonant_dashboard}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-resonant} -d ${POSTGRES_DB:-resonant_dashboard}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -53,7 +51,7 @@ services:
     networks:
       - resonant_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -81,58 +79,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-  intent_bridge:
-    build:
-      context: ../intent_bridge
-      dockerfile: Dockerfile
-    container_name: resonant_intent_bridge
-    restart: unless-stopped
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: ${POSTGRES_USER:-resonant}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-resonant_dashboard}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      backend:
-        condition: service_started
-    networks:
-      - resonant_network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "5"
-
-  message_bridge:
-    build:
-      context: ../message_bridge
-      dockerfile: Dockerfile
-    container_name: resonant_message_bridge
-    restart: unless-stopped
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: ${POSTGRES_USER:-resonant}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-resonant_dashboard}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      backend:
-        condition: service_started
-    networks:
-      - resonant_network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "5"
 
 volumes:
   postgres_data:

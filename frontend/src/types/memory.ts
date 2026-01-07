@@ -4,16 +4,12 @@
  */
 
 export interface MemoryStatus {
-  user_id: string;
-  total_memories: number;
-  active_memories: number;
-  compressed_memories: number;
-  expired_memories: number;
-  memory_usage_mb: number;
-  capacity_limit_mb: number;
-  usage_percentage: number;
-  last_cleanup_at: string | null;
-  next_cleanup_at: string | null;
+  active_count: number;
+  archive_count: number;
+  total_count: number;
+  usage_ratio: number;
+  total_size_bytes: number;
+  limit: number;
 }
 
 export interface CompressionResult {
@@ -66,6 +62,7 @@ export interface ChoicePoint {
 }
 
 export interface ChoicePointListResponse {
-  choice_points: ChoicePoint[];
+  choice_points?: ChoicePoint[];
+  results?: ChoicePoint[];
   count: number;
 }

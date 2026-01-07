@@ -16,7 +16,7 @@ async def get_memory_status(
 ):
     """メモリ使用状況を取得"""
     try:
-        status = await capacity_manager.get_memory_status(user_id)
+        status = await capacity_manager.get_memory_usage(user_id)
         return status
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get memory status: {str(e)}")

@@ -69,29 +69,68 @@ async def create_context_assembler(
 
     # 2. リポジトリ初期化
     try:
-        from backend.app.repositories.message_repo import MessageRepository
+        from app.repositories.message_repo import MessageRepository
         from memory_store.repository import MemoryRepository
-        from app.services.memory.repositories import SessionRepository
+        from memory_store.postgres_repository import PostgresMemoryRepository
     except ImportError as e:
         raise ImportError(
             "Required repositories not found. "
             "Please implement repositories or use Mock."
         ) from e
 
-    message_repo = MessageRepository(pool)
-    memory_repo = MemoryRepository(pool)
-    session_repo = SessionRepository(pool)
+    # MessageRepository uses global db singleton
+    message_repo = MessageRepository()
+    # PostgresMemoryRepository needs pool for direct pgvector access
+    memory_repo = PostgresMemoryRepository(pool)
+    
+    # Create a minimal stub SessionRepository for Context Assembler
+    class StubSessionRepository:
+        """Stub implementation for SessionRepository - provides minimal functionality"""
+        async def get_by_id(self, session_id):
+            return None
+        
+        async def create(self, session):
+            return session
+            
+        async def update(self, session):
+            return session
+            
+        async def update_heartbeat(self, session_id):
+            return None
+            
+        async def list_active(self, user_id):
+            return []
+            
+        async def list_by_status(self, status):
+            return []
+    
+    session_repo = StubSessionRepository()
 
-    # 3. Retrieval Orchestrator初期化
-    try:
-        from retrieval.orchestrator import RetrievalOrchestrator
-    except ImportError as e:
-        raise ImportError(
-            "Retrieval Orchestrator not found. "
-            "Please implement retrieval/orchestrator.py or use Mock."
-        ) from e
-
-    retrieval = RetrievalOrchestrator(memory_repo=memory_repo)
+    # 3. Retrieval Orchestrator初期化 with MemoryStoreService
+    from retrieval.orchestrator import create_orchestrator
+    from memory_store.service import MemoryStoreService
+    from memory_store.embedding import MockEmbeddingService, OpenAIEmbeddingService
+    import os
+    
+    # Create embedding service
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if openai_key:
+        embedding_service = OpenAIEmbeddingService(api_key=openai_key)
+    else:
+        embedding_service = MockEmbeddingService()
+    
+    # Create memory store service
+    memory_store_service = MemoryStoreService(
+        repository=memory_repo,
+        embedding_service=embedding_service,
+    )
+    
+    # Create retrieval orchestrator via factory
+    retrieval = create_orchestrator(
+        memory_store=memory_store_service,
+        pool=pool,
+        embedding_service=embedding_service,
+    )
 
     # 4. Sprint 7: Session Summary Repository初期化
     session_summary_repo = None

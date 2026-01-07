@@ -4,8 +4,8 @@
 from app.integrations.claude import KanaAIBridge, ClaudeClient
 from app.integrations.mock_claude import MockAIBridge, MockClaudeClient
 
-# Feedback Bridges (OpenAI/Yuno)
-from app.integrations.openai import YunoFeedbackBridge, OpenAIClient
+# AI Bridges (OpenAI/Yuno)
+from app.integrations.openai import YunoFeedbackBridge, OpenAIClient, YunoAIBridge
 from app.integrations.mock_openai import MockFeedbackBridge, MockOpenAIClient
 
 # Data Bridges
@@ -23,7 +23,8 @@ __all__ = [
     "ClaudeClient",
     "MockAIBridge",
     "MockClaudeClient",
-    # Feedback
+    # OpenAI/Yuno
+    "YunoAIBridge",
     "YunoFeedbackBridge",
     "OpenAIClient",
     "MockFeedbackBridge",

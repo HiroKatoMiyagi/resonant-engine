@@ -99,7 +99,7 @@ class PostgresDashboardRepository(DashboardRepository):
                 FROM intents
                 WHERE created_at > NOW() - ($1 || ' hours')::interval
                 """,
-                hours,
+                str(hours),
             )
         return int(value or 0)
 
@@ -109,37 +109,41 @@ class PostgresDashboardRepository(DashboardRepository):
             value = await conn.fetchval(
                 """
                 SELECT COUNT(DISTINCT intent_id)
-                FROM intent_corrections
+                FROM corrections
                 """
             )
         return int(value or 0)
 
     async def fetch_avg_processing_time_ms(self, lookback_hours: int = 24) -> Optional[float]:
         pool = await self._ensure_pool()
-        async with pool.acquire() as conn:
-            value = await conn.fetchval(
-                """
-                WITH started AS (
-                    SELECT intent_id, MIN(created_at) AS started_at
-                    FROM audit_logs
-                    WHERE event_type = 'BRIDGE_STARTED'
-                      AND created_at > NOW() - ($1 || ' hours')::interval
-                    GROUP BY intent_id
-                ),
-                completed AS (
-                    SELECT intent_id, MIN(created_at) AS completed_at
-                    FROM audit_logs
-                    WHERE event_type = 'BRIDGE_COMPLETED'
-                      AND created_at > NOW() - ($1 || ' hours')::interval
-                    GROUP BY intent_id
+        try:
+            async with pool.acquire() as conn:
+                value = await conn.fetchval(
+                    """
+                    WITH started AS (
+                        SELECT intent_id, MIN(created_at) AS started_at
+                        FROM audit_logs
+                        WHERE event_type = 'BRIDGE_STARTED'
+                          AND created_at > NOW() - ($1 || ' hours')::interval
+                        GROUP BY intent_id
+                    ),
+                    completed AS (
+                        SELECT intent_id, MIN(created_at) AS completed_at
+                        FROM audit_logs
+                        WHERE event_type = 'BRIDGE_COMPLETED'
+                          AND created_at > NOW() - ($1 || ' hours')::interval
+                        GROUP BY intent_id
+                    )
+                    SELECT AVG(EXTRACT(epoch FROM (completed.completed_at - started.started_at)) * 1000)
+                    FROM started
+                    JOIN completed ON completed.intent_id = started.intent_id
+                    """,
+                    str(lookback_hours),
                 )
-                SELECT AVG(EXTRACT(epoch FROM (completed.completed_at - started.started_at)) * 1000)
-                FROM started
-                JOIN completed ON completed.intent_id = started.intent_id
-                """,
-                lookback_hours,
-            )
-        return float(value) if value is not None else None
+            return float(value) if value is not None else None
+        except Exception:
+            # audit_logs table may not exist
+            return None
 
     async def fetch_timeline(
         self,
@@ -172,9 +176,9 @@ class PostgresDashboardRepository(DashboardRepository):
                 """
                 SELECT intent_id,
                        COUNT(*) AS correction_count,
-                       (ARRAY_AGG(correction ORDER BY created_at DESC))[1] AS last_correction,
+                       (ARRAY_AGG(reason ORDER BY created_at DESC))[1] AS last_correction,
                        MAX(created_at) AS last_updated
-                FROM intent_corrections
+                FROM corrections
                 GROUP BY intent_id
                 ORDER BY last_updated DESC
                 LIMIT $1

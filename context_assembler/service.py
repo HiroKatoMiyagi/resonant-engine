@@ -6,8 +6,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from memory_store.models import MemoryResult
-from backend.app.models.message import MessageResponse
-from backend.app.repositories.message_repo import MessageRepository
+from app.models.message import MessageResponse
+from app.repositories.message_repo import MessageRepository
 from app.services.memory.repositories import SessionRepository
 from retrieval.orchestrator import RetrievalOrchestrator, RetrievalOptions
 

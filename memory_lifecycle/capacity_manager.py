@@ -49,30 +49,44 @@ class CapacityManager:
         Returns:
             Dict: 使用状況
         """
-        async with self.pool.acquire() as conn:
-            # アクティブメモリ数
-            active_count = await conn.fetchval("""
-                SELECT COUNT(*) FROM semantic_memories WHERE user_id = $1
-            """, user_id)
+        try:
+            async with self.pool.acquire() as conn:
+                # アクティブメモリ数
+                active_count = await conn.fetchval("""
+                    SELECT COUNT(*) FROM memories WHERE user_id = $1
+                """, user_id) or 0
 
-            # アーカイブ数
-            archive_count = await conn.fetchval("""
-                SELECT COUNT(*) FROM memory_archive WHERE user_id = $1
-            """, user_id)
+                # アーカイブ数 (table may not exist)
+                try:
+                    archive_count = await conn.fetchval("""
+                        SELECT COUNT(*) FROM memory_archive WHERE user_id = $1
+                    """, user_id) or 0
+                except Exception:
+                    archive_count = 0
 
-            # 合計サイズ（概算）
-            total_size = await conn.fetchval("""
-                SELECT SUM(LENGTH(content)) FROM semantic_memories WHERE user_id = $1
-            """, user_id) or 0
+                # 合計サイズ（概算）
+                total_size = await conn.fetchval("""
+                    SELECT SUM(LENGTH(content)) FROM memories WHERE user_id = $1
+                """, user_id) or 0
 
-            usage_ratio = active_count / self.MEMORY_LIMIT
+                usage_ratio = active_count / self.MEMORY_LIMIT if self.MEMORY_LIMIT > 0 else 0.0
 
+                return {
+                    "active_count": active_count,
+                    "archive_count": archive_count,
+                    "total_count": active_count + archive_count,
+                    "usage_ratio": usage_ratio,
+                    "total_size_bytes": total_size,
+                    "limit": self.MEMORY_LIMIT
+                }
+        except Exception as e:
+            logger.error(f"Failed to get memory usage: {e}")
             return {
-                "active_count": active_count,
-                "archive_count": archive_count,
-                "total_count": active_count + archive_count,
-                "usage_ratio": usage_ratio,
-                "total_size_bytes": total_size,
+                "active_count": 0,
+                "archive_count": 0,
+                "total_count": 0,
+                "usage_ratio": 0.0,
+                "total_size_bytes": 0,
                 "limit": self.MEMORY_LIMIT
             }
 
@@ -114,3 +128,20 @@ class CapacityManager:
             "new_usage": new_usage,
             "compress_result": compress_result
         }
+
+    async def cleanup_expired_memories(self) -> int:
+        """
+        期限切れメモリをクリーンアップ
+
+        Returns:
+            int: 削除されたメモリ数
+        """
+        async with self.pool.acquire() as conn:
+            result = await conn.execute("""
+                DELETE FROM memories
+                WHERE expires_at IS NOT NULL AND expires_at < NOW()
+            """)
+            # Extract count from result like "DELETE 5"
+            deleted_count = int(result.split()[-1]) if result else 0
+            logger.info(f"Cleaned up {deleted_count} expired memories")
+            return deleted_count

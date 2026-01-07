@@ -288,3 +288,84 @@ class YunoFeedbackBridge(FeedbackBridge):
 
 # Alias
 OpenAIClient = YunoFeedbackBridge
+
+
+class YunoAIBridge:
+    """OpenAI/ChatGPT-based AI Bridge for conversation (similar to KanaAIBridge)."""
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: str = "gpt-4o",
+        client: Optional[AsyncOpenAI] = None,
+    ) -> None:
+        key = api_key or os.getenv("OPENAI_API_KEY")
+        if not key and client is None:
+            raise ValueError("OPENAI_API_KEY must be configured for YunoAIBridge")
+        self._model = model
+        self._client = client or AsyncOpenAI(api_key=key)
+
+    async def process_intent(self, intent: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Process intent and generate AI response using OpenAI.
+
+        Args:
+            intent: Intent dict with fields:
+                - content: str (user message) - required
+                - user_id: str - optional
+
+        Returns:
+            Response dict with status and summary
+        """
+        user_message = intent.get("content", "")
+        
+        messages = [
+            {
+                "role": "system",
+                "content": """You are Yuno, an intelligent assistant for the Resonant Engine system.
+You help users with their questions and tasks in a friendly and helpful manner.
+Respond in Japanese unless the user writes in English.
+Be concise but thorough in your responses.""",
+            },
+            {
+                "role": "user",
+                "content": user_message,
+            },
+        ]
+
+        try:
+            response = await self._client.chat.completions.create(
+                model=self._model,
+                max_tokens=4096,
+                temperature=0.5,
+                messages=messages,
+            )
+        except Exception as exc:
+            return {
+                "status": "error",
+                "reason": str(exc),
+            }
+
+        content = self._extract_content(response)
+        if content is None:
+            return {
+                "status": "error",
+                "reason": "empty-response",
+            }
+
+        return {
+            "status": "ok",
+            "model": self._model,
+            "summary": content,
+        }
+
+    @staticmethod
+    def _extract_content(response: Any) -> Optional[str]:
+        choices = getattr(response, "choices", None)
+        if not choices:
+            return None
+        message = getattr(choices[0], "message", None)
+        if message and hasattr(message, "content"):
+            return message.content
+        return None
+

@@ -28,8 +28,7 @@ async def get_db_pool() -> asyncpg.Pool:
 @lru_cache
 def get_contradiction_detector() -> ContradictionDetector:
     """Contradiction Detector取得（シングルトン）"""
-    # Note: poolは実行時に取得する必要があるため、ここでは初期化のみ
-    return ContradictionDetector()
+    return ContradictionDetector(db.pool)
 
 
 async def get_memory_service() -> MemoryStoreService:

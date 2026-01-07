@@ -20,3 +20,4 @@ daemon/hypothesis_trace_log.jsonl
 logs/trace_map.jsonl
 /.kiro
 logs/trace_map.jsonl
+frontend/node_modules/

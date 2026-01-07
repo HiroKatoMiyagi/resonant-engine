@@ -12,7 +12,7 @@ export default function MessageList() {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="text-gray-500">Loading messages...</div>
+        <div className="text-gray-500">メッセージを読み込んでいます...</div>
       </div>
     );
   }
@@ -20,7 +20,7 @@ export default function MessageList() {
   if (error) {
     return (
       <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded">
-        Error loading messages
+        メッセージの読み込みに失敗しました
       </div>
     );
   }
@@ -58,7 +58,7 @@ export default function MessageList() {
   return (
     <div className="space-y-4 max-h-[600px] overflow-y-auto">
       {messages.length === 0 ? (
-        <div className="text-center text-gray-500 py-8">No messages yet</div>
+        <div className="text-center text-gray-500 py-8">メッセージはまだありません</div>
       ) : (
         messages.map((msg) => (
           <div

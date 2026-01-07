@@ -49,6 +49,7 @@ class MemoryStoreService:
         source_type: Optional[SourceType] = None,
         metadata: Optional[Dict[str, Any]] = None,
         expires_at: Optional[datetime] = None,
+        user_id: Optional[str] = None,
     ) -> int:
         """
         記憶を保存
@@ -59,6 +60,7 @@ class MemoryStoreService:
             source_type: 'intent', 'thought', 'correction', 'decision'
             metadata: メタデータ（JSONB）
             expires_at: 有効期限（Working Memory用、未指定時は24時間後）
+            user_id: ユーザーID
 
         Returns:
             memory_id: 保存された記憶のID
@@ -74,6 +76,10 @@ class MemoryStoreService:
                 hours=self.working_memory_ttl_hours
             )
 
+        # Extract user_id from metadata if not provided directly
+        if user_id is None and metadata:
+            user_id = metadata.get("user_id")
+
         # Save to repository
         memory_id = await self.repository.insert_memory(
             content=content,
@@ -82,6 +88,7 @@ class MemoryStoreService:
             source_type=source_type.value if source_type else None,
             metadata=metadata or {},
             expires_at=expires_at,
+            user_id=user_id,
         )
 
         # Log the save operation

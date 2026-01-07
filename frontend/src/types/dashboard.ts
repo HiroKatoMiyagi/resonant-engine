@@ -1,48 +1,45 @@
 /**
  * Dashboard Analytics API Types
- * バックエンドスキーマに完全一致
+ * バックエンドAPIレスポンスに完全一致
  */
 
+export interface StatusDistribution {
+  pending?: number;
+  completed?: number;
+  in_progress?: number;
+  failed?: number;
+  [key: string]: number | undefined;
+}
+
+export interface RecentActivity {
+  last_hour: number;
+  last_24h: number;
+  last_7d: number;
+}
+
 export interface SystemOverview {
-  total_users: number;
-  active_sessions: number;
   total_intents: number;
-  completed_intents: number;
-  pending_contradictions: number;
-  system_health: 'healthy' | 'warning' | 'error';
-  uptime_seconds: number;
-  memory_usage_mb: number;
-  cpu_usage_percent: number;
-  last_updated: string;
+  status_distribution: StatusDistribution;
+  recent_activity: RecentActivity;
+  correction_rate: number;
+  avg_processing_time_ms: number;
+  active_websockets: number;
 }
 
 export interface TimelineEntry {
-  timestamp: string;
-  event_type: string;
-  event_data: Record<string, unknown>;
-  user_id: string | null;
-  intent_id: string | null;
-  session_id: string | null;
+  time: string;
+  count: number;
 }
 
 export interface TimelineResponse {
-  entries: TimelineEntry[];
-  granularity: 'minute' | 'hour' | 'day';
-  start_time: string;
-  end_time: string;
-  total_count: number;
+  entries?: TimelineEntry[];
+  // Backend returns array directly
 }
 
 export interface Correction {
-  id: string;
-  correction_type: string;
-  original_value: unknown;
-  corrected_value: unknown;
-  corrected_by: string;
-  correction_reason: string;
-  corrected_at: string;
-  intent_id: string | null;
-  user_id: string | null;
+  intent_id: string;
+  correction_count: number;
+  last_correction: string | null;
 }
 
 export interface CorrectionsResponse {

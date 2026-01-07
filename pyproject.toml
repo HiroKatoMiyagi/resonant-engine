@@ -1,6 +1,14 @@
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+pythonpath = "."
+markers = [
+    "slow: Marks tests as Sprint 2 performance validations that may take longer to run.",
+    "e2e: End-to-end integration tests requiring full environment.",
+    "db: Tests requiring database connection.",
+    "timeout: Tests with specific timeout requirements.",
+    "integration: Integration tests.",
+]
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::pytest.PytestRemovedIn9Warning",

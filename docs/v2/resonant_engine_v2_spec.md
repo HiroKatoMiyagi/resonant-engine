@@ -1,0 +1,247 @@
+# Resonant Engine V2 — システム構成と動作環境
+
+**作成日:** 2026-09-04
+**位置づけ:** V1 の後継。コードは引き継がない。発想のみ引き継ぐ。
+**この文書について:** V2 の設計書はこの1本だけ。2本目を書かない（V1は314本書いて実装が11,705行だった）。
+
+---
+
+## 1. V2 が解くたった1つの問題
+
+```
+僕が質問する
+→ AIが A を提案 → 実施 → 失敗
+→ AIが B を提案 → 実施 → 失敗
+→ AIが A と同じものを C として提案      ← ここを止める
+```
+
+**それ以外は解かない。** 用語ドリフト、時間軸制約、矛盾検出、哲学層、ダッシュボードは
+V2 のスコープ外。効果が測れてから、必要なら足す。
+
+---
+
+## 2. 中心となる設計判断
+
+### 判断1: Hook は「判定」せず「証拠を置く」
+
+決定論が必要なのは**提示**であって、**同一性の判断**ではない。
+
+| 役割 | 担当 | 保証 |
+|---|---|---|
+| 失敗の記録 | Hook（PostToolUse / UserPromptSubmit） | **必ず走る** |
+| 候補の検索と注入 | Hook（UserPromptSubmit） | **必ず走る** |
+| 「これは同じか」の判断 | モデル | 証拠が目の前にあるので機能する |
+
+V1の敗因は判定精度（Jaccard 0.85）ではなく、**そもそも証拠が存在しなかったこと**。
+証拠さえ置けば、判定はモデルの得意分野。
+
+**結果: v0.1 に埋め込みもベクトルDBも不要。**
+
+### 判断2: 常駐プロセスを持たない
+
+Hook はイベント時に起動して終わる短命プロセス。
+「起動していない」「ポートが埋まっている」「docker が落ちている」が構造的に発生しない。
+V1の docker-compose 管理コストは、放置の一因だった。
+
+### 判断3: 性能予算 200ms
+
+`UserPromptSubmit` は入力のたびに走る。ここが遅いと体験が壊れ、使われなくなる。
+- SQLite FTS5(trigram) 検索: 1–5ms
+- Python 起動 + 標準ライブラリのみ: 約 50–120ms
+- **合計 150ms 以内。予算内。**
+
+埋め込みを入れると 500ms〜1秒。だから v0.1 では入れない。
+
+---
+
+## 3. システム構成
+
+```
+resonant-v2/                      ← V1とは別リポジトリ
+├── hooks/
+│   ├── on_prompt.py              # UserPromptSubmit: 失敗確定 + 検索 + 注入
+│   ├── on_tool.py                # PostToolUse:      非ゼロ終了を失敗として記録
+│   └── on_stop.py                # Stop:             AIの提案を pending で保存
+├── core/
+│   ├── store.py                  # SQLite 単一ファイル。全アクセスはここ経由
+│   ├── signals.py                # 失敗シグナルの検出規則
+│   └── render.py                 # 注入ブロックの整形
+├── rv                            # CLI (rv failed / rv why / rv stats)
+├── README.md                     # 唯一のドキュメント
+└── .claude/settings.json         # hook 登録
+```
+
+**目標: 合計 1,000 行以内。** 超えたら機能追加を止める。
+
+### データモデル
+
+```sql
+CREATE TABLE attempts (
+  id              INTEGER PRIMARY KEY,
+  created_at      TEXT NOT NULL,        -- ISO8601
+  session_id      TEXT,                 -- セッションを跨いで残すための鍵
+  project         TEXT NOT NULL,        -- cwd から導出
+  branch          TEXT,
+  proposal        TEXT NOT NULL,        -- AIが出した提案（全文）
+  outcome         TEXT NOT NULL,        -- pending | success | failed
+  failure_signal  TEXT,                 -- エラー、症状、非ゼロ終了の内容
+  evidence        TEXT,                 -- 'posttooluse' | 'user_utterance'
+  resolved_at     TEXT
+);
+
+CREATE VIRTUAL TABLE attempts_fts USING fts5(
+  proposal, failure_signal,
+  content='attempts', content_rowid='id',
+  tokenize='trigram'                    -- 日本語が動く唯一の実用的な選択
+);
+```
+
+`tokenize='trigram'` が要点。標準の unicode61 は日本語を分割できない。
+trigram は 3文字単位なので、形態素解析なしで日本語が引ける。
+（V1 の `to_tsvector('english', ...)` はここを外していた。）
+
+### Hook の動作
+
+**1. `Stop` — AIが答え終わった直後**
+```
+そのターンの提案を attempts に outcome='pending' で保存
+```
+
+**2. `PostToolUse` — コマンド実行のたび**
+```
+非ゼロ終了 / テスト失敗 を検出
+→ 直近の pending attempt を outcome='failed' に更新
+→ failure_signal にエラー出力を保存
+→ evidence='posttooluse'
+```
+**言葉に頼らない経路。** 黙っていても失敗が貯まる。これが V1 の
+`python utils/record_intent.py "..."`（手動）との決定的な差。
+
+**3. `UserPromptSubmit` — 入力のたび**
+```
+(a) 失敗シグナル検出（「失敗」「動かない」「エラー」「まだ」「直ってない」/ エラー貼付）
+    → 直近の pending attempt を failed に確定
+
+(b) 現在の入力 + 直近の文脈で attempts_fts を検索
+    WHERE outcome='failed' AND project=? ORDER BY rank LIMIT 5
+
+(c) ヒットがあれば additionalContext として注入
+```
+
+### 注入されるもの
+
+```
+⚠ 過去に失敗した経路が見つかりました（候補 3 件）
+   これらと今回の提案が同じ方向でないか、答える前に確認してください。
+   同じ場合は、その旨を述べ、まだ潰していない方向を選択肢として示してください。
+
+■ 2026-09-01 14:20 / branch: feature/api
+  提案: contradictions エンドポイントを追加して 404 を解消
+  結果: FAILED — /messages 側は解消せず
+  根拠: pytest exit=1
+
+■ 2026-09-01 16:05 / branch: feature/api
+  提案: フロントの API パスを修正
+  結果: FAILED — 404 継続
+  根拠: ユーザー発言「まだ直ってない」
+```
+
+**遮断ではなく提示。** 誤検知しても情報が1つ増えるだけで済む設計にする。
+（否定しない・選択肢を奪わない、という原則と一致する。）
+
+### CLI
+
+```
+rv failed              # このプロジェクトの失敗済み経路
+rv why <キーワード>     # なぜその方向を捨てたか
+rv stats               # 注入回数 / 失敗記録数 / 有効だった回数
+```
+
+---
+
+## 4. 動作環境
+
+| 項目 | 内容 |
+|---|---|
+| OS | macOS（Apple Silicon）。Linux でもそのまま動く |
+| ランタイム | Python 3.11+（venv、既存の習慣どおり） |
+| 依存パッケージ | **なし**（v0.1 は標準ライブラリのみ。`pip install` 不要） |
+| データベース | SQLite（Python 同梱）。FTS5 trigram に **3.34+** が必要 |
+| データの置き場所 | `<project>/.resonant/attempts.db` — 単一ファイル |
+| バックアップ | `cp attempts.db` |
+| 常駐プロセス | **なし** |
+| ポート | **なし** |
+| Docker | **なし** |
+| ネットワーク通信 | **なし**（全処理がローカル。コードも失敗内容も外に出ない） |
+| 統合先 | Claude Code の hooks（`.claude/settings.json`） |
+| 追加コスト | **ゼロ**（API 呼び出しがない） |
+
+### 事前確認（1コマンド）
+
+```bash
+python3 -c "import sqlite3; print(sqlite3.sqlite_version)"   # 3.34 以上であること
+```
+
+### V1 との対比
+
+| 層 | V1 | V2 |
+|---|---|---|
+| DB | PostgreSQL + TimescaleDB + Docker | SQLite 1ファイル |
+| API | FastAPI + 10 routers | なし（Hookが直接叩く） |
+| フロント | React + Vite 4,385行 | なし（CLI のみ） |
+| リアルタイム | WebSocket | なし |
+| 記録の起動 | 手動コマンド | Hook（自動） |
+| 判定 | Jaccard 0.85（言い換えに無力） | 証拠を提示しモデルが判定 |
+| 検索 | `to_tsvector('english')` | FTS5 trigram（日本語が引ける） |
+| 実装量 | 11,705 行 | 1,000 行以内 |
+| 起動 | docker-compose | 不要 |
+
+---
+
+## 5. 段階の設計 — 複雑さを足す条件を先に決める
+
+複雑さは「必要になったら」ではなく、**あらかじめ決めた数字を超えたとき**にだけ足す。
+
+### v0.1（最初の週末）
+上記の構成そのまま。埋め込みなし、常駐なし、依存なし。
+
+### v0.2 に進む条件
+> `rv stats` で **見逃し（後から「あれ記録に無かった」と気づいた回数）が 3 回**を超えたら。
+
+そのとき初めて埋め込みを足す。
+- ローカル埋め込み（multilingual-e5-small / ONNX、約120MB）
+- unix socket の軽量ワーカーを Hook が必要時に自動起動
+- FTS を一次フィルタ、埋め込みを二次判定にする二段構え
+
+**条件を満たさない限り、足さない。**
+
+### v0.3 以降の候補（現時点では作らない）
+- MCP サーバ化（ChatGPT / Cursor から同じ台帳を読む。助言型になる）
+- 他プロジェクトへの横展開
+- チーム共有（ここで初めて認証と PostgreSQL の議論が発生する）
+
+---
+
+## 6. 規律 — V1 の失敗を繰り返さないための制約
+
+1. **ドキュメントは README 1本。** 設計書はこの文書で終わり。2本目を書かない。
+2. **自己評価レポートを書かない。** 判定は `rv stats` の3つの数字のみ。
+3. **1,000 行を超えたら機能追加を止める。**
+4. **効果が出るまで新機能を足さない。** 段階の条件（§5）だけが例外。
+5. **哲学層（ERF / Crisis Index / RDF / 呼吸モデル）は V2 に入れない。** 別リポジトリに置く。
+   反証できない層と、反証できる層を、同じリポジトリに同居させない。
+
+---
+
+## 7. 成功判定
+
+導入から数日、次の3つだけを見る。
+
+| 指標 | 意味 |
+|---|---|
+| 注入が出た回数 | 仕組みが動いているか |
+| うち「本当に同じだった」割合 | 誤検知率 |
+| **「これが無かったら同じことをやっていた」と思った回数** | 価値の有無 |
+
+**3つ目が1回でもあれば、価値は確定。**
+ゼロなら週末1つで止める。V1 のように1年ではない。

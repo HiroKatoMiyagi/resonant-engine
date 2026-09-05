@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""rv — Resonant Engine V2 CLI
+
+使い方:
+  rv failed [--limit N]        このプロジェクトの失敗済み経路
+  rv why <キーワード> [--limit N]  なぜその方向を捨てたか検索
+  rv stats                     注入回数・有効回数などの統計
+  rv useful                    直近の注入を『役に立った』と記録
+  rv falsepositive             直近の注入を『誤検知だった』と記録
+"""
+import argparse
+import os
+import sys
+
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _THIS_DIR)
+
+from core import store  # noqa: E402
+
+
+def _project_and_conn():
+    project = store.resolve_project_root(os.getcwd())
+    conn = store.connect(project)
+    return project, conn
+
+
+def cmd_failed(args):
+    project, conn = _project_and_conn()
+    rows = store.list_failed(conn, project, limit=args.limit)
+    if not rows:
+        print("失敗記録なし")
+        return
+    for r in rows:
+        print(f"[{r['id']}] {r['created_at']} branch={r['branch'] or '-'}")
+        print(f"  提案: {(r['proposal'] or '')[:200]}")
+        print(f"  結果: {r['failure_signal'] or '(詳細なし)'}")
+        print(f"  根拠: {r['evidence'] or '-'}")
+        print()
+
+
+def cmd_why(args):
+    project, conn = _project_and_conn()
+    hits = store.search_failed(conn, project, args.keyword, limit=args.limit)
+    if not hits:
+        print("該当なし")
+        return
+    for h in hits:
+        print(f"[{h['id']}] {h['created_at']} branch={h['branch'] or '-'}")
+        print(f"  提案: {(h['proposal'] or '')[:200]}")
+        print(f"  結果: {h['failure_signal'] or '(詳細なし)'}")
+        print()
+
+
+def cmd_stats(args):
+    project, conn = _project_and_conn()
+    s = store.stats(conn, project)
+    print(f"プロジェクト: {project}")
+    print(f"総試行数:     {s['total']}")
+    print(f"失敗記録数:   {s['failed']}")
+    print(f"注入回数:     {s['injections']}")
+    print(f"  うち有効:   {s['useful']}")
+    print(f"  うち誤検知: {s['false_positive']}")
+
+
+def cmd_useful(args):
+    project, conn = _project_and_conn()
+    ok = store.mark_last_injection(conn, project, useful=True)
+    print("記録しました" if ok else "直近の注入が見つかりません")
+
+
+def cmd_falsepositive(args):
+    project, conn = _project_and_conn()
+    ok = store.mark_last_injection(conn, project, useful=False)
+    print("記録しました" if ok else "直近の注入が見つかりません")
+
+
+def main():
+    p = argparse.ArgumentParser(prog="rv", description="Resonant Engine V2 CLI")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    p_failed = sub.add_parser("failed", help="このプロジェクトの失敗済み経路")
+    p_failed.add_argument("--limit", type=int, default=20)
+    p_failed.set_defaults(func=cmd_failed)
+
+    p_why = sub.add_parser("why", help="なぜその方向を捨てたか検索")
+    p_why.add_argument("keyword")
+    p_why.add_argument("--limit", type=int, default=5)
+    p_why.set_defaults(func=cmd_why)
+
+    p_stats = sub.add_parser("stats", help="注入回数・有効回数などの統計")
+    p_stats.set_defaults(func=cmd_stats)
+
+    p_useful = sub.add_parser("useful", help="直近の注入を『役に立った』と記録")
+    p_useful.set_defaults(func=cmd_useful)
+
+    p_fp = sub.add_parser("falsepositive", help="直近の注入を『誤検知だった』と記録")
+    p_fp.set_defaults(func=cmd_falsepositive)
+
+    args = p.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
